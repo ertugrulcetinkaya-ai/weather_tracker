@@ -5,6 +5,7 @@ import { Button, StyleSheet, Text, View } from 'react-native';
 import { checkBackendHealth } from './src/api/health';
 import { fetchCurrentWeather } from './src/api/weather';
 import type { CurrentWeather } from './src/types/weather';
+import { formatWeatherTime, getWeatherCondition } from './src/weather/condition';
 
 type ConnectionState = 'checking' | 'connected' | 'disconnected';
 type WeatherState = 'loading' | 'ready' | 'error';
@@ -51,19 +52,25 @@ export default function App() {
       )}
       {weatherState === 'ready' && weather !== null && (
         <View style={styles.card}>
+          <Text style={styles.emoji}>{getWeatherCondition(weather.weather_code).emoji}</Text>
           <Text style={styles.location}>{weather.location.toUpperCase()}</Text>
           <Text style={styles.temperature}>{Math.round(weather.temperature)}°</Text>
+          <Text style={styles.condition}>
+            {getWeatherCondition(weather.weather_code).label}
+          </Text>
           <Text style={styles.apparent}>
             Hissedilen {Math.round(weather.apparent_temperature)}°
           </Text>
+          <Text style={styles.updatedAt}>{formatWeatherTime(weather.time)}</Text>
+          <View style={styles.divider} />
           <View style={styles.row}>
             <View style={styles.metric}>
               <Text style={styles.metricLabel}>Nem</Text>
-              <Text>%{weather.humidity}</Text>
+              <Text style={styles.metricValue}>%{weather.humidity}</Text>
             </View>
             <View style={styles.metric}>
               <Text style={styles.metricLabel}>Rüzgâr</Text>
-              <Text>{weather.wind_speed} km/s</Text>
+              <Text style={styles.metricValue}>{weather.wind_speed} km/s</Text>
             </View>
           </View>
         </View>
@@ -95,10 +102,17 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#f2f6fa',
-    borderRadius: 12,
-    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e1e8f0',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
     alignItems: 'center',
     width: '100%',
+  },
+  emoji: {
+    fontSize: 44,
+    marginBottom: 4,
   },
   location: {
     fontSize: 18,
@@ -106,18 +120,34 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   temperature: {
-    fontSize: 48,
+    fontSize: 52,
     fontWeight: 'bold',
-    marginVertical: 8,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  condition: {
+    fontSize: 16,
+    fontWeight: '500',
   },
   apparent: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#555',
-    marginBottom: 16,
+    marginTop: 4,
+  },
+  updatedAt: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 8,
+  },
+  divider: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#dde5ee',
+    marginVertical: 16,
   },
   row: {
     flexDirection: 'row',
-    gap: 32,
+    gap: 40,
   },
   metric: {
     alignItems: 'center',
@@ -126,6 +156,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#777',
     marginBottom: 4,
+  },
+  metricValue: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   status: {
     marginTop: 32,
