@@ -1,10 +1,7 @@
-// Backend base URL.
-// - iOS simulator için localhost çalışabilir.
-// - Fiziksel cihazda daha sonra Mac'in LAN IP adresi kullanılacak.
-const BACKEND_URL = "http://127.0.0.1:8000";
+import { BACKEND_URL } from './config';
 
 export type HealthResponse = {
-  status: "ok";
+  status: 'ok';
 };
 
 export async function checkBackendHealth(): Promise<HealthResponse> {
@@ -13,8 +10,8 @@ export async function checkBackendHealth(): Promise<HealthResponse> {
     throw new Error(`Health check failed with status ${response.status}`);
   }
   const data = (await response.json()) as HealthResponse;
-  if (data.status !== "ok") {
-    throw new Error("Unexpected health response");
+  if (data.status !== 'ok') {
+    throw new Error('Unexpected health response');
   }
   return data;
 }
