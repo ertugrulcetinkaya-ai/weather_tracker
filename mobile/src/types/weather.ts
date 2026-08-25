@@ -7,3 +7,11 @@ export type CurrentWeather = {
   weather_code: number;
   time: string;
 };
+
+export type HourlyWeather = {
+  time: string;
+  temperature: number;
+  precipitation: number;
+  weather_code: number;
+  wind_speed: number;
+};

@@ -1,10 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { Button, StyleSheet, Text, View } from 'react-native';
+import { Button, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { checkBackendHealth } from './src/api/health';
-import { fetchCurrentWeather } from './src/api/weather';
-import type { CurrentWeather } from './src/types/weather';
+import { fetchCurrentWeather, fetchHourlyWeather } from './src/api/weather';
+import type { CurrentWeather, HourlyWeather } from './src/types/weather';
 import { formatWeatherTime, getWeatherCondition } from './src/weather/condition';
 
 type ConnectionState = 'checking' | 'connected' | 'disconnected';
@@ -14,6 +14,8 @@ export default function App() {
   const [connection, setConnection] = useState<ConnectionState>('checking');
   const [weatherState, setWeatherState] = useState<WeatherState>('loading');
   const [weather, setWeather] = useState<CurrentWeather | null>(null);
+  const [hourlyState, setHourlyState] = useState<WeatherState>('loading');
+  const [hourly, setHourly] = useState<HourlyWeather[]>([]);
 
   const runHealthCheck = useCallback(async () => {
     setConnection('checking');
@@ -35,10 +37,21 @@ export default function App() {
     }
   }, []);
 
+  const loadHourlyWeather = useCallback(async () => {
+    setHourlyState('loading');
+    try {
+      setHourly(await fetchHourlyWeather());
+      setHourlyState('ready');
+    } catch {
+      setHourlyState('error');
+    }
+  }, []);
+
   useEffect(() => {
     runHealthCheck();
     loadWeather();
-  }, [runHealthCheck, loadWeather]);
+    loadHourlyWeather();
+  }, [runHealthCheck, loadWeather, loadHourlyWeather]);
 
   return (
     <View style={styles.container}>
@@ -75,6 +88,43 @@ export default function App() {
           </View>
         </View>
       )}
+
+      <Text style={styles.hourlyTitle}>Saatlik Tahmin</Text>
+
+      {hourlyState === 'loading' && (
+        <Text style={styles.status}>Saatlik tahmin yükleniyor...</Text>
+      )}
+
+      {hourlyState === 'error' && (
+        <Text style={styles.status}>Saatlik tahmin alınamadı.</Text>
+      )}
+
+      {hourlyState === 'ready' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.hourlyScroll}
+          contentContainerStyle={styles.hourlyContent}
+        >
+          {hourly.map((h) => (
+            <View key={h.time} style={styles.hourlyCard}>
+              <Text style={styles.hourlyTime}>
+                {h.time.slice(11, 16)}
+              </Text>
+              <Text style={styles.hourlyEmoji}>
+                {getWeatherCondition(h.weather_code).emoji}
+              </Text>
+              <Text style={styles.hourlyTemperature}>
+                {Math.round(h.temperature)}°C
+              </Text>
+              <Text style={styles.hourlyPrecipitation}>
+                {h.precipitation} mm
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
       <Text style={styles.status}>
         {connection === 'checking'
           ? 'Backend kontrol ediliyor...'
@@ -165,5 +215,46 @@ const styles = StyleSheet.create({
     marginTop: 32,
     fontSize: 12,
     color: '#999',
+  },
+  hourlyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 24,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  hourlyScroll: {
+    width: '100%',
+  },
+  hourlyContent: {
+    paddingRight: 16,
+  },
+  hourlyCard: {
+    width: 72,
+    backgroundColor: '#f2f6fa',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e1e8f0',
+    padding: 10,
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  hourlyTime: {
+    fontSize: 11,
+    color: '#777',
+    marginBottom: 6,
+  },
+  hourlyEmoji: {
+    fontSize: 22,
+    marginBottom: 6,
+  },
+  hourlyTemperature: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  hourlyPrecipitation: {
+    fontSize: 10,
+    color: '#555',
   },
 });
