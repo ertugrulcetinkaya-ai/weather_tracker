@@ -9,3 +9,11 @@ class CurrentWeather(BaseModel):
     wind_speed: float
     weather_code: int
     time: str
+
+
+class HourlyWeather(BaseModel):
+    time: str
+    temperature: float
+    precipitation: float
+    weather_code: int
+    wind_speed: float
