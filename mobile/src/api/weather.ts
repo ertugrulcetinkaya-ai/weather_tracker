@@ -1,9 +1,16 @@
-import type { CurrentWeather, HourlyWeather, RainEvent } from '../types/weather';
+import type { CurrentWeather, HourlyWeather, RainEvent, WeatherLocation } from '../types/weather';
 
 import { BACKEND_URL } from './config';
 
-export async function fetchCurrentWeather(): Promise<CurrentWeather> {
-  const response = await fetch(`${BACKEND_URL}/weather/current`);
+function coordsQuery(location: WeatherLocation): string {
+  return `latitude=${location.latitude}&longitude=${location.longitude}`;
+}
+
+export async function fetchCurrentWeather(location?: WeatherLocation): Promise<CurrentWeather> {
+  const qs = location
+    ? `?${coordsQuery(location)}&location=${encodeURIComponent(location.name)}`
+    : '';
+  const response = await fetch(`${BACKEND_URL}/weather/current${qs}`);
   if (!response.ok) {
     throw new Error(`Weather request failed with status ${response.status}`);
   }
@@ -22,8 +29,9 @@ export async function fetchCurrentWeather(): Promise<CurrentWeather> {
   return data;
 }
 
-export async function fetchHourlyWeather(): Promise<HourlyWeather[]> {
-  const response = await fetch(`${BACKEND_URL}/weather/hourly`);
+export async function fetchHourlyWeather(location?: WeatherLocation): Promise<HourlyWeather[]> {
+  const qs = location ? `?${coordsQuery(location)}` : '';
+  const response = await fetch(`${BACKEND_URL}/weather/hourly${qs}`);
   if (!response.ok) {
     throw new Error(`Hourly weather request failed with status ${response.status}`);
   }
@@ -45,8 +53,9 @@ export async function fetchHourlyWeather(): Promise<HourlyWeather[]> {
   return data;
 }
 
-export async function fetchNextRainEvent(): Promise<RainEvent | null> {
-  const response = await fetch(`${BACKEND_URL}/weather/rain/next`);
+export async function fetchNextRainEvent(location?: WeatherLocation): Promise<RainEvent | null> {
+  const qs = location ? `?${coordsQuery(location)}` : '';
+  const response = await fetch(`${BACKEND_URL}/weather/rain/next${qs}`);
   if (!response.ok) {
     throw new Error(`Rain event request failed with status ${response.status}`);
   }

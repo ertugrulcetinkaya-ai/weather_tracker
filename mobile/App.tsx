@@ -1,14 +1,20 @@
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
-import { Button, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { checkBackendHealth } from './src/api/health';
 import { fetchCurrentWeather, fetchHourlyWeather, fetchNextRainEvent } from './src/api/weather';
-import type { CurrentWeather, HourlyWeather, RainEvent } from './src/types/weather';
+import type { CurrentWeather, HourlyWeather, RainEvent, WeatherLocation } from './src/types/weather';
 import { formatWeatherTime, getWeatherCondition } from './src/weather/condition';
 
 type ConnectionState = 'checking' | 'connected' | 'disconnected';
 type WeatherState = 'loading' | 'ready' | 'error';
+
+const WEATHER_LOCATIONS: WeatherLocation[] = [
+  { name: 'Elazığ', latitude: 38.6743, longitude: 39.2232 },
+  { name: 'İstanbul', latitude: 41.0082, longitude: 28.9784 },
+  { name: 'Ankara', latitude: 39.9334, longitude: 32.8597 },
+];
 
 function formatHour(time: string): string {
   const parts = time.split('T');
@@ -21,12 +27,14 @@ function formatHour(time: string): string {
 
 export default function App() {
   const [connection, setConnection] = useState<ConnectionState>('checking');
+  const [selectedLocation, setSelectedLocation] = useState<WeatherLocation>(WEATHER_LOCATIONS[0]);
   const [weatherState, setWeatherState] = useState<WeatherState>('loading');
   const [weather, setWeather] = useState<CurrentWeather | null>(null);
   const [hourlyState, setHourlyState] = useState<WeatherState>('loading');
   const [hourly, setHourly] = useState<HourlyWeather[]>([]);
   const [rainState, setRainState] = useState<WeatherState>('loading');
   const [nextRain, setNextRain] = useState<RainEvent | null>(null);
+  const requestSeq = useRef(0);
 
   const runHealthCheck = useCallback(async () => {
     setConnection('checking');
@@ -38,51 +46,91 @@ export default function App() {
     }
   }, []);
 
-  const loadWeather = useCallback(async () => {
+  const loadWeather = useCallback(async (loc: WeatherLocation) => {
+    const seq = ++requestSeq.current;
     setWeatherState('loading');
     try {
-      setWeather(await fetchCurrentWeather());
+      const data = await fetchCurrentWeather(loc);
+      if (seq !== requestSeq.current) return;
+      setWeather(data);
       setWeatherState('ready');
     } catch {
+      if (seq !== requestSeq.current) return;
       setWeatherState('error');
     }
   }, []);
 
-  const loadHourlyWeather = useCallback(async () => {
+  const loadHourlyWeather = useCallback(async (loc: WeatherLocation) => {
+    const seq = ++requestSeq.current;
     setHourlyState('loading');
     try {
-      setHourly(await fetchHourlyWeather());
+      const data = await fetchHourlyWeather(loc);
+      if (seq !== requestSeq.current) return;
+      setHourly(data);
       setHourlyState('ready');
     } catch {
+      if (seq !== requestSeq.current) return;
       setHourlyState('error');
     }
   }, []);
 
-  const loadNextRain = useCallback(async () => {
+  const loadNextRain = useCallback(async (loc: WeatherLocation) => {
+    const seq = ++requestSeq.current;
     setRainState('loading');
     try {
-      setNextRain(await fetchNextRainEvent());
+      const data = await fetchNextRainEvent(loc);
+      if (seq !== requestSeq.current) return;
+      setNextRain(data);
       setRainState('ready');
     } catch {
+      if (seq !== requestSeq.current) return;
       setRainState('error');
     }
   }, []);
 
   useEffect(() => {
     runHealthCheck();
-    loadWeather();
-    loadHourlyWeather();
-    loadNextRain();
-  }, [runHealthCheck, loadWeather, loadHourlyWeather, loadNextRain]);
+  }, [runHealthCheck]);
+
+  useEffect(() => {
+    loadWeather(selectedLocation);
+    loadHourlyWeather(selectedLocation);
+    loadNextRain(selectedLocation);
+  }, [selectedLocation, loadWeather, loadHourlyWeather, loadNextRain]);
+
+  const handleCitySelect = (loc: WeatherLocation) => {
+    if (loc.name === selectedLocation.name) return;
+    setSelectedLocation(loc);
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Hava Takip</Text>
+
+      <View style={styles.cityRow}>
+        {WEATHER_LOCATIONS.map((loc) => (
+          <Pressable
+            key={loc.name}
+            style={[styles.cityChip, loc.name === selectedLocation.name && styles.cityChipActive]}
+            onPress={() => handleCitySelect(loc)}
+          >
+            <Text
+              style={[
+                styles.cityChipText,
+                loc.name === selectedLocation.name && styles.cityChipTextActive,
+              ]}
+            >
+              {loc.name}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
       {weatherState === 'loading' && <Text>Hava durumu yükleniyor...</Text>}
       {weatherState === 'error' && (
         <>
           <Text>Hava durumu alınamadı.</Text>
-          <Button title="Tekrar Dene" onPress={loadWeather} />
+          <Button title="Tekrar Dene" onPress={() => loadWeather(selectedLocation)} />
         </>
       )}
       {weatherState === 'ready' && weather !== null && (
@@ -205,7 +253,32 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 24,
+    marginBottom: 12,
+  },
+  cityRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  cityChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f2f6fa',
+    borderWidth: 1,
+    borderColor: '#e1e8f0',
+  },
+  cityChipActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  cityChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#555',
+  },
+  cityChipTextActive: {
+    color: '#fff',
   },
   card: {
     backgroundColor: '#f2f6fa',

@@ -1,3 +1,9 @@
+export type WeatherLocation = {
+  name: string;
+  latitude: number;
+  longitude: number;
+};
+
 export type CurrentWeather = {
   location: string;
   temperature: number;
