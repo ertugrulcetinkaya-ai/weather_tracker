@@ -17,3 +17,10 @@ class HourlyWeather(BaseModel):
     precipitation: float
     weather_code: int
     wind_speed: float
+
+
+class RainEvent(BaseModel):
+    start_time: str
+    end_time: str
+    total_precipitation: float
+    peak_time: str
