@@ -118,6 +118,8 @@ export default function App() {
         <Text style={styles.status}>Yağış bilgisi alınamadı.</Text>
       )}
       {rainState === 'ready' && (
+        <>
+        <Text style={styles.rainTitle}>Sıradaki Yağış</Text>
         <View style={styles.rainCard}>
           {nextRain !== null ? (
             <>
@@ -141,6 +143,7 @@ export default function App() {
             </>
           )}
         </View>
+        </>
       )}
 
       <Text style={styles.hourlyTitle}>Saatlik Tahmin</Text>
@@ -283,6 +286,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#555',
+    marginTop: 20,
     marginBottom: 8,
   },
   rainEmoji: {
@@ -308,13 +312,17 @@ const styles = StyleSheet.create({
   },
   hourlyScroll: {
     width: '100%',
+    height: 145,
+    flexGrow: 0,
   },
   hourlyContent: {
     flexDirection: 'row',
     paddingRight: 16,
+    alignItems: 'flex-start',
   },
   hourlyCard: {
     width: 72,
+    height: 135,
     backgroundColor: '#f2f6fa',
     borderRadius: 12,
     borderWidth: 1,
