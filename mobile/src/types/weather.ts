@@ -15,3 +15,10 @@ export type HourlyWeather = {
   weather_code: number;
   wind_speed: number;
 };
+
+export type RainEvent = {
+  start_time: string;
+  end_time: string;
+  total_precipitation: number;
+  peak_time: string;
+};

@@ -3,12 +3,21 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { checkBackendHealth } from './src/api/health';
-import { fetchCurrentWeather, fetchHourlyWeather } from './src/api/weather';
-import type { CurrentWeather, HourlyWeather } from './src/types/weather';
+import { fetchCurrentWeather, fetchHourlyWeather, fetchNextRainEvent } from './src/api/weather';
+import type { CurrentWeather, HourlyWeather, RainEvent } from './src/types/weather';
 import { formatWeatherTime, getWeatherCondition } from './src/weather/condition';
 
 type ConnectionState = 'checking' | 'connected' | 'disconnected';
 type WeatherState = 'loading' | 'ready' | 'error';
+
+function formatHour(time: string): string {
+  const parts = time.split('T');
+  if (parts.length < 2) return time;
+  const timePart = parts[1];
+  const match = timePart.match(/^(\d{2}):(\d{2})/);
+  if (match) return `${match[1]}:${match[2]}`;
+  return timePart;
+}
 
 export default function App() {
   const [connection, setConnection] = useState<ConnectionState>('checking');
@@ -16,6 +25,8 @@ export default function App() {
   const [weather, setWeather] = useState<CurrentWeather | null>(null);
   const [hourlyState, setHourlyState] = useState<WeatherState>('loading');
   const [hourly, setHourly] = useState<HourlyWeather[]>([]);
+  const [rainState, setRainState] = useState<WeatherState>('loading');
+  const [nextRain, setNextRain] = useState<RainEvent | null>(null);
 
   const runHealthCheck = useCallback(async () => {
     setConnection('checking');
@@ -47,11 +58,22 @@ export default function App() {
     }
   }, []);
 
+  const loadNextRain = useCallback(async () => {
+    setRainState('loading');
+    try {
+      setNextRain(await fetchNextRainEvent());
+      setRainState('ready');
+    } catch {
+      setRainState('error');
+    }
+  }, []);
+
   useEffect(() => {
     runHealthCheck();
     loadWeather();
     loadHourlyWeather();
-  }, [runHealthCheck, loadWeather, loadHourlyWeather]);
+    loadNextRain();
+  }, [runHealthCheck, loadWeather, loadHourlyWeather, loadNextRain]);
 
   return (
     <View style={styles.container}>
@@ -86,6 +108,39 @@ export default function App() {
               <Text style={styles.metricValue}>{weather.wind_speed} km/s</Text>
             </View>
           </View>
+        </View>
+      )}
+
+      <Text style={styles.hourlyTitle}>Sıradaki Yağış</Text>
+      {rainState === 'loading' && (
+        <Text style={styles.status}>Yağış tahmini yükleniyor...</Text>
+      )}
+      {rainState === 'error' && (
+        <Text style={styles.status}>Yağış bilgisi alınamadı.</Text>
+      )}
+      {rainState === 'ready' && (
+        <View style={styles.rainCard}>
+          {nextRain !== null ? (
+            <>
+              <Text style={styles.rainEmoji}>🌧️</Text>
+              <Text style={styles.rainTime}>
+                {formatHour(nextRain.start_time)} – {formatHour(nextRain.end_time)}
+              </Text>
+              <Text style={styles.rainDetail}>
+                Toplam {Number(nextRain.total_precipitation.toFixed(2))} mm
+              </Text>
+              <Text style={styles.rainDetail}>
+                En yoğun: {formatHour(nextRain.peak_time)}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.rainEmoji}>☀️</Text>
+              <Text style={styles.rainDetail}>
+                Önümüzdeki 24 saatte yağış beklenmiyor.
+              </Text>
+            </>
+          )}
         </View>
       )}
 
@@ -215,6 +270,35 @@ const styles = StyleSheet.create({
     marginTop: 32,
     fontSize: 12,
     color: '#999',
+  },
+  rainCard: {
+    backgroundColor: '#f2f6fa',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e1e8f0',
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    marginBottom: 8,
+  },
+  rainTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 8,
+  },
+  rainEmoji: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  rainTime: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  rainDetail: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 2,
   },
   hourlyTitle: {
     fontSize: 18,

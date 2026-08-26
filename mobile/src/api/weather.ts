@@ -1,4 +1,4 @@
-import type { CurrentWeather, HourlyWeather } from '../types/weather';
+import type { CurrentWeather, HourlyWeather, RainEvent } from '../types/weather';
 
 import { BACKEND_URL } from './config';
 
@@ -41,6 +41,26 @@ export async function fetchHourlyWeather(): Promise<HourlyWeather[]> {
     )
   ) {
     throw new Error('Unexpected hourly weather response');
+  }
+  return data;
+}
+
+export async function fetchNextRainEvent(): Promise<RainEvent | null> {
+  const response = await fetch(`${BACKEND_URL}/weather/rain/next`);
+  if (!response.ok) {
+    throw new Error(`Rain event request failed with status ${response.status}`);
+  }
+  const data = (await response.json()) as RainEvent | null;
+  if (data === null) {
+    return null;
+  }
+  if (
+    typeof data.start_time !== 'string' ||
+    typeof data.end_time !== 'string' ||
+    typeof data.total_precipitation !== 'number' ||
+    typeof data.peak_time !== 'string'
+  ) {
+    throw new Error('Unexpected rain event response');
   }
   return data;
 }
