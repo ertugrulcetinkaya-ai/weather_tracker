@@ -111,7 +111,6 @@ export default function App() {
         </View>
       )}
 
-      <Text style={styles.hourlyTitle}>Sıradaki Yağış</Text>
       {rainState === 'loading' && (
         <Text style={styles.status}>Yağış tahmini yükleniyor...</Text>
       )}
@@ -311,6 +310,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   hourlyContent: {
+    flexDirection: 'row',
     paddingRight: 16,
   },
   hourlyCard: {
