@@ -42,14 +42,18 @@ def _select_hour_index(times: list, target: str) -> int:
     raise WeatherFetchError("Open-Meteo response does not include the current hour")
 
 
-def get_current_weather() -> CurrentWeather:
+def get_current_weather(
+    latitude: float = ELAZIG_LATITUDE,
+    longitude: float = ELAZIG_LONGITUDE,
+    location: str = ELAZIG_LOCATION,
+) -> CurrentWeather:
     now = datetime.now(ZoneInfo(ELAZIG_TIMEZONE))
     target_time = now.strftime("%Y-%m-%dT%H:00")
     response = httpx.get(
         OPEN_METEO_ECMWF_BASE_URL,
         params={
-            "latitude": ELAZIG_LATITUDE,
-            "longitude": ELAZIG_LONGITUDE,
+            "latitude": latitude,
+            "longitude": longitude,
             "hourly": ",".join(CURRENT_FIELDS),
             "timezone": ELAZIG_TIMEZONE,
             "forecast_hours": 24,
@@ -76,7 +80,7 @@ def get_current_weather() -> CurrentWeather:
             raise WeatherFetchError(f"Open-Meteo response is missing current hour value for: {field}")
 
     return CurrentWeather(
-        location=ELAZIG_LOCATION,
+        location=location,
         temperature=selected["temperature_2m"],
         apparent_temperature=selected["apparent_temperature"],
         humidity=selected["relative_humidity_2m"],
@@ -86,13 +90,16 @@ def get_current_weather() -> CurrentWeather:
     )
 
 
-def fetch_hourly_weather() -> list[HourlyWeather]:
+def fetch_hourly_weather(
+    latitude: float = ELAZIG_LATITUDE,
+    longitude: float = ELAZIG_LONGITUDE,
+) -> list[HourlyWeather]:
     try:
         response = httpx.get(
             OPEN_METEO_ECMWF_BASE_URL,
             params={
-                "latitude": ELAZIG_LATITUDE,
-                "longitude": ELAZIG_LONGITUDE,
+                "latitude": latitude,
+                "longitude": longitude,
                 "hourly": ",".join(HOURLY_FIELDS),
                 "timezone": ELAZIG_TIMEZONE,
                 "forecast_hours": 24,
