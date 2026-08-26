@@ -42,6 +42,17 @@ def find_rain_events(hourly: list[HourlyWeather]) -> list[RainEvent]:
     return events
 
 
+def find_next_rain_event(
+    events: list[RainEvent],
+    now: str,
+) -> RainEvent | None:
+    now_dt = _parse_time(now)
+    candidates = [e for e in events if _parse_time(e.end_time) > now_dt]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda e: _parse_time(e.start_time))
+
+
 def _parse_time(value: str) -> datetime:
     try:
         return datetime.fromisoformat(value)
