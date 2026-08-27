@@ -568,11 +568,14 @@ const styles = StyleSheet.create({
   },
   favoritesScroll: {
     width: '100%',
+    height: 52,
+    flexGrow: 0,
   },
   favoritesContent: {
     flexDirection: 'row',
     gap: 8,
     paddingRight: 16,
+    alignItems: 'center',
   },
   favoriteChip: {
     flexShrink: 0,
