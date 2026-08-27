@@ -577,10 +577,13 @@ const styles = StyleSheet.create({
   favoriteChip: {
     flexShrink: 0,
     minWidth: 110,
+    minHeight: 44,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   favoriteChipText: {
     flexShrink: 0,
+    lineHeight: 20,
   },
   favoriteToggle: {
     marginTop: 12,
