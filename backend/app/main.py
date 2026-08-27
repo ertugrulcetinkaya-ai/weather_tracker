@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query
 
-from app.weather.models import CurrentWeather, RainEvent
+from app.weather.models import CurrentWeather, LocationSearchResult, RainEvent
 from app.weather.open_meteo import (
     ELAZIG_LATITUDE,
     ELAZIG_LOCATION,
@@ -13,6 +13,7 @@ from app.weather.open_meteo import (
     WeatherFetchError,
     fetch_hourly_weather,
     get_current_weather,
+    search_locations,
 )
 from app.weather.rain import find_next_rain_event, find_rain_events
 
@@ -36,6 +37,14 @@ def _validate_coords(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/locations/search", response_model=list[LocationSearchResult])
+def locations_search(q: str = Query(..., min_length=2)):
+    try:
+        return search_locations(q)
+    except WeatherFetchError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 @app.get("/weather/current", response_model=CurrentWeather)

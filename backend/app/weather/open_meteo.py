@@ -3,9 +3,10 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from app.weather.models import CurrentWeather, HourlyWeather
+from app.weather.models import CurrentWeather, HourlyWeather, LocationSearchResult
 
 OPEN_METEO_ECMWF_BASE_URL = "https://api.open-meteo.com/v1/ecmwf"
+OPEN_METEO_GEOCODING_BASE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 ELAZIG_LATITUDE = 38.6743
 ELAZIG_LONGITUDE = 39.2232
 ELAZIG_LOCATION = "Elazığ"
@@ -138,3 +139,64 @@ def fetch_hourly_weather(
             wind_speed=wind_speed,
         ))
     return points
+
+
+def search_locations(query: str) -> list[LocationSearchResult]:
+    try:
+        response = httpx.get(
+            OPEN_METEO_GEOCODING_BASE_URL,
+            params={
+                "name": query,
+                "count": 8,
+                "language": "tr",
+                "format": "json",
+                "countryCode": "TR",
+            },
+            timeout=10.0,
+        )
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise WeatherFetchError(f"Open-Meteo geocoding request failed: {exc}") from exc
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise WeatherFetchError("Open-Meteo geocoding response is not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise WeatherFetchError("Open-Meteo geocoding response is not an object")
+
+    results = payload.get("results")
+    if not isinstance(results, list):
+        return []
+
+    locations: list[LocationSearchResult] = []
+    seen: set[tuple[str, float, float]] = set()
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        latitude = item.get("latitude")
+        longitude = item.get("longitude")
+        if not isinstance(name, str) or not name:
+            continue
+        if isinstance(latitude, bool) or not isinstance(latitude, (int, float)):
+            continue
+        if isinstance(longitude, bool) or not isinstance(longitude, (int, float)):
+            continue
+        country_code = item.get("country_code")
+        if country_code is not None and country_code != "TR":
+            continue
+        admin1 = item.get("admin1")
+        country = item.get("country")
+        identity = (name, float(latitude), float(longitude))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        locations.append(LocationSearchResult(
+            name=name,
+            latitude=float(latitude),
+            longitude=float(longitude),
+            admin1=admin1 if isinstance(admin1, str) else None,
+            country=country if isinstance(country, str) else "Türkiye",
+        ))
+    return locations

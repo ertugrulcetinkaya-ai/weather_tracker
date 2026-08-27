@@ -24,3 +24,11 @@ class RainEvent(BaseModel):
     end_time: str
     total_precipitation: float
     peak_time: str
+
+
+class LocationSearchResult(BaseModel):
+    name: str
+    latitude: float
+    longitude: float
+    admin1: str | None
+    country: str
