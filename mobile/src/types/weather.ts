@@ -28,3 +28,11 @@ export type RainEvent = {
   total_precipitation: number;
   peak_time: string;
 };
+
+export type LocationSearchResult = {
+  name: string;
+  latitude: number;
+  longitude: number;
+  admin1: string | null;
+  country: string;
+};

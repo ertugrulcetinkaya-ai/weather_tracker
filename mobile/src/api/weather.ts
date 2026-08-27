@@ -1,4 +1,10 @@
-import type { CurrentWeather, HourlyWeather, RainEvent, WeatherLocation } from '../types/weather';
+import type {
+  CurrentWeather,
+  HourlyWeather,
+  LocationSearchResult,
+  RainEvent,
+  WeatherLocation,
+} from '../types/weather';
 
 import { BACKEND_URL } from './config';
 
@@ -70,6 +76,20 @@ export async function fetchNextRainEvent(location?: WeatherLocation): Promise<Ra
     typeof data.peak_time !== 'string'
   ) {
     throw new Error('Unexpected rain event response');
+  }
+  return data;
+}
+
+export async function searchLocations(query: string): Promise<LocationSearchResult[]> {
+  const response = await fetch(
+    `${BACKEND_URL}/locations/search?q=${encodeURIComponent(query)}`
+  );
+  if (!response.ok) {
+    throw new Error(`Location search request failed with status ${response.status}`);
+  }
+  const data = (await response.json()) as LocationSearchResult[];
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected location search response');
   }
   return data;
 }

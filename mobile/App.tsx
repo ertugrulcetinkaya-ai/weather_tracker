@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { checkBackendHealth } from './src/api/health';
-import { fetchCurrentWeather, fetchHourlyWeather, fetchNextRainEvent } from './src/api/weather';
-import type { CurrentWeather, HourlyWeather, RainEvent, WeatherLocation } from './src/types/weather';
+import { fetchCurrentWeather, fetchHourlyWeather, fetchNextRainEvent, searchLocations } from './src/api/weather';
+import type { CurrentWeather, HourlyWeather, LocationSearchResult, RainEvent, WeatherLocation } from './src/types/weather';
 import { formatWeatherTime, getWeatherCondition } from './src/weather/condition';
 
 type ConnectionState = 'checking' | 'connected' | 'disconnected';
@@ -100,6 +100,12 @@ export default function App() {
   const [nextRain, setNextRain] = useState<RainEvent | null>(null);
   const [favorites, setFavorites] = useState<WeatherLocation[]>([]);
   const requestSeq = useRef(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<LocationSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchCompleted, setSearchCompleted] = useState(false);
+  const searchSeq = useRef(0);
 
   const runHealthCheck = useCallback(async () => {
     setConnection('checking');
@@ -188,10 +194,60 @@ export default function App() {
     refreshWeather(selectedLocation);
   }, [locationHydrated, selectedLocation, refreshWeather]);
 
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 2) {
+      searchSeq.current += 1;
+      setSearchResults([]);
+      setSearchLoading(false);
+      setSearchError(null);
+      setSearchCompleted(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const requestId = ++searchSeq.current;
+      setSearchLoading(true);
+      setSearchError(null);
+      setSearchCompleted(false);
+      searchLocations(trimmed)
+        .then((results) => {
+          if (requestId !== searchSeq.current) return;
+          setSearchResults(results);
+          setSearchLoading(false);
+          setSearchCompleted(true);
+        })
+        .catch(() => {
+          if (requestId !== searchSeq.current) return;
+          setSearchResults([]);
+          setSearchError('Arama yapılamadı.');
+          setSearchLoading(false);
+          setSearchCompleted(true);
+        });
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
   const handleCitySelect = (loc: WeatherLocation) => {
     if (loc.name === selectedLocation.name) return;
     setSelectedLocation(loc);
     AsyncStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(loc)).catch(() => {});
+  };
+
+  const handleSearchSelect = (result: LocationSearchResult) => {
+    const location: WeatherLocation = {
+      name: result.name,
+      latitude: result.latitude,
+      longitude: result.longitude,
+    };
+    handleCitySelect(location);
+    searchSeq.current += 1;
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchError(null);
+    setSearchLoading(false);
+    setSearchCompleted(false);
   };
 
   const isFavorite = favorites.some((f) => isSameLocation(f, selectedLocation));
@@ -226,6 +282,42 @@ export default function App() {
           </Pressable>
         ))}
       </View>
+
+      <View style={styles.searchBox}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Şehir veya yer ara"
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+      {searchLoading && <Text style={styles.searchStatus}>Aranıyor...</Text>}
+      {searchError !== null && !searchLoading && (
+        <Text style={styles.searchStatus}>{searchError}</Text>
+      )}
+      {!searchLoading &&
+        searchError === null &&
+        searchCompleted &&
+        searchResults.length === 0 && (
+          <Text style={styles.searchStatus}>Sonuç bulunamadı.</Text>
+        )}
+      {searchResults.length > 0 && (
+        <View style={styles.searchResults}>
+          {searchResults.map((result) => (
+            <Pressable
+              key={`${result.name}-${result.latitude}-${result.longitude}`}
+              style={styles.searchResultRow}
+              onPress={() => handleSearchSelect(result)}
+            >
+              <Text style={styles.searchResultName}>{result.name}</Text>
+              {result.admin1 !== null && result.admin1 !== '' && (
+                <Text style={styles.searchResultAdmin}>{result.admin1}</Text>
+              )}
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       {favorites.length > 0 && (
         <>
@@ -418,6 +510,50 @@ const styles = StyleSheet.create({
   },
   cityChipTextActive: {
     color: '#fff',
+  },
+  searchBox: {
+    width: '100%',
+    marginBottom: 8,
+  },
+  searchInput: {
+    width: '100%',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#f2f6fa',
+    borderWidth: 1,
+    borderColor: '#e1e8f0',
+    fontSize: 14,
+    color: '#333',
+  },
+  searchStatus: {
+    fontSize: 13,
+    color: '#777',
+    marginTop: 8,
+  },
+  searchResults: {
+    width: '100%',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e1e8f0',
+    backgroundColor: '#f2f6fa',
+    marginBottom: 8,
+  },
+  searchResultRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e1e8f0',
+  },
+  searchResultName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  searchResultAdmin: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 2,
   },
   favoritesTitle: {
     fontSize: 14,
