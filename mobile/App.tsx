@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
   favoriteChip: {
     flexShrink: 0,
     minWidth: 110,
-    minHeight: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
