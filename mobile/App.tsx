@@ -46,46 +46,44 @@ export default function App() {
     }
   }, []);
 
-  const loadWeather = useCallback(async (loc: WeatherLocation) => {
-    const seq = ++requestSeq.current;
+  const refreshWeather = useCallback(async (loc: WeatherLocation) => {
+    const requestId = ++requestSeq.current;
     setWeatherState('loading');
-    try {
-      const data = await fetchCurrentWeather(loc);
-      if (seq !== requestSeq.current) return;
-      setWeather(data);
-      setWeatherState('ready');
-    } catch {
-      if (seq !== requestSeq.current) return;
-      setWeatherState('error');
-    }
-  }, []);
-
-  const loadHourlyWeather = useCallback(async (loc: WeatherLocation) => {
-    const seq = ++requestSeq.current;
     setHourlyState('loading');
-    try {
-      const data = await fetchHourlyWeather(loc);
-      if (seq !== requestSeq.current) return;
-      setHourly(data);
-      setHourlyState('ready');
-    } catch {
-      if (seq !== requestSeq.current) return;
-      setHourlyState('error');
-    }
-  }, []);
-
-  const loadNextRain = useCallback(async (loc: WeatherLocation) => {
-    const seq = ++requestSeq.current;
     setRainState('loading');
-    try {
-      const data = await fetchNextRainEvent(loc);
-      if (seq !== requestSeq.current) return;
-      setNextRain(data);
-      setRainState('ready');
-    } catch {
-      if (seq !== requestSeq.current) return;
-      setRainState('error');
-    }
+
+    fetchCurrentWeather(loc)
+      .then((data) => {
+        if (requestId !== requestSeq.current) return;
+        setWeather(data);
+        setWeatherState('ready');
+      })
+      .catch(() => {
+        if (requestId !== requestSeq.current) return;
+        setWeatherState('error');
+      });
+
+    fetchHourlyWeather(loc)
+      .then((data) => {
+        if (requestId !== requestSeq.current) return;
+        setHourly(data);
+        setHourlyState('ready');
+      })
+      .catch(() => {
+        if (requestId !== requestSeq.current) return;
+        setHourlyState('error');
+      });
+
+    fetchNextRainEvent(loc)
+      .then((data) => {
+        if (requestId !== requestSeq.current) return;
+        setNextRain(data);
+        setRainState('ready');
+      })
+      .catch(() => {
+        if (requestId !== requestSeq.current) return;
+        setRainState('error');
+      });
   }, []);
 
   useEffect(() => {
@@ -93,10 +91,8 @@ export default function App() {
   }, [runHealthCheck]);
 
   useEffect(() => {
-    loadWeather(selectedLocation);
-    loadHourlyWeather(selectedLocation);
-    loadNextRain(selectedLocation);
-  }, [selectedLocation, loadWeather, loadHourlyWeather, loadNextRain]);
+    refreshWeather(selectedLocation);
+  }, [selectedLocation, refreshWeather]);
 
   const handleCitySelect = (loc: WeatherLocation) => {
     if (loc.name === selectedLocation.name) return;
@@ -130,7 +126,7 @@ export default function App() {
       {weatherState === 'error' && (
         <>
           <Text>Hava durumu alınamadı.</Text>
-          <Button title="Tekrar Dene" onPress={() => loadWeather(selectedLocation)} />
+          <Button title="Tekrar Dene" onPress={() => refreshWeather(selectedLocation)} />
         </>
       )}
       {weatherState === 'ready' && weather !== null && (
