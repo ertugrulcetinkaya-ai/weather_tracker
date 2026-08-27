@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -16,6 +17,33 @@ const WEATHER_LOCATIONS: WeatherLocation[] = [
   { name: 'Ankara', latitude: 39.9334, longitude: 32.8597 },
 ];
 
+const LOCATION_STORAGE_KEY = 'weather_tracker:selected_location';
+
+function parseStoredLocation(raw: string | null): WeatherLocation | null {
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const candidate = parsed as Partial<WeatherLocation>;
+    if (
+      typeof candidate.name !== 'string' ||
+      typeof candidate.latitude !== 'number' ||
+      typeof candidate.longitude !== 'number' ||
+      !Number.isFinite(candidate.latitude) ||
+      !Number.isFinite(candidate.longitude) ||
+      candidate.latitude < -90 ||
+      candidate.latitude > 90 ||
+      candidate.longitude < -180 ||
+      candidate.longitude > 180
+    ) {
+      return null;
+    }
+    return { name: candidate.name, latitude: candidate.latitude, longitude: candidate.longitude };
+  } catch {
+    return null;
+  }
+}
+
 function formatHour(time: string): string {
   const parts = time.split('T');
   if (parts.length < 2) return time;
@@ -28,6 +56,7 @@ function formatHour(time: string): string {
 export default function App() {
   const [connection, setConnection] = useState<ConnectionState>('checking');
   const [selectedLocation, setSelectedLocation] = useState<WeatherLocation>(WEATHER_LOCATIONS[0]);
+  const [locationHydrated, setLocationHydrated] = useState(false);
   const [weatherState, setWeatherState] = useState<WeatherState>('loading');
   const [weather, setWeather] = useState<CurrentWeather | null>(null);
   const [hourlyState, setHourlyState] = useState<WeatherState>('loading');
@@ -91,12 +120,35 @@ export default function App() {
   }, [runHealthCheck]);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let stored: WeatherLocation | null = null;
+      try {
+        const raw = await AsyncStorage.getItem(LOCATION_STORAGE_KEY);
+        stored = parseStoredLocation(raw);
+      } catch {
+        stored = null;
+      }
+      if (cancelled) return;
+      if (stored !== null) {
+        setSelectedLocation(stored);
+      }
+      setLocationHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!locationHydrated) return;
     refreshWeather(selectedLocation);
-  }, [selectedLocation, refreshWeather]);
+  }, [locationHydrated, selectedLocation, refreshWeather]);
 
   const handleCitySelect = (loc: WeatherLocation) => {
     if (loc.name === selectedLocation.name) return;
     setSelectedLocation(loc);
+    AsyncStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(loc)).catch(() => {});
   };
 
   return (
