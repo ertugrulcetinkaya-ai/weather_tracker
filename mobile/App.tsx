@@ -333,11 +333,13 @@ export default function App() {
                 key={`${loc.name}-${loc.latitude}-${loc.longitude}`}
                 style={[
                   styles.cityChip,
+                  styles.favoriteChip,
                   isSameLocation(loc, selectedLocation) && styles.cityChipActive,
                 ]}
                 onPress={() => handleCitySelect(loc)}
               >
                 <Text
+                  numberOfLines={1}
                   style={[
                     styles.cityChipText,
                     isSameLocation(loc, selectedLocation) && styles.cityChipTextActive,
@@ -570,6 +572,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     paddingRight: 16,
+  },
+  favoriteChip: {
+    flexShrink: 0,
   },
   favoriteToggle: {
     marginTop: 12,
