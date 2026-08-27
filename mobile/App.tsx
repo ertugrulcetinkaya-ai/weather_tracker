@@ -18,6 +18,11 @@ const WEATHER_LOCATIONS: WeatherLocation[] = [
 ];
 
 const LOCATION_STORAGE_KEY = 'weather_tracker:selected_location';
+const FAVORITES_STORAGE_KEY = 'weather_tracker:favorite_locations';
+
+function isSameLocation(a: WeatherLocation, b: WeatherLocation): boolean {
+  return a.name === b.name && a.latitude === b.latitude && a.longitude === b.longitude;
+}
 
 function parseStoredLocation(raw: string | null): WeatherLocation | null {
   if (raw === null) return null;
@@ -44,6 +49,36 @@ function parseStoredLocation(raw: string | null): WeatherLocation | null {
   }
 }
 
+function parseStoredFavorites(raw: string | null): WeatherLocation[] {
+  if (raw === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const result: WeatherLocation[] = [];
+    for (const item of parsed) {
+      if (typeof item !== 'object' || item === null) continue;
+      const candidate = item as Partial<WeatherLocation>;
+      if (
+        typeof candidate.name !== 'string' ||
+        typeof candidate.latitude !== 'number' ||
+        typeof candidate.longitude !== 'number' ||
+        !Number.isFinite(candidate.latitude) ||
+        !Number.isFinite(candidate.longitude) ||
+        candidate.latitude < -90 ||
+        candidate.latitude > 90 ||
+        candidate.longitude < -180 ||
+        candidate.longitude > 180
+      ) {
+        continue;
+      }
+      result.push({ name: candidate.name, latitude: candidate.latitude, longitude: candidate.longitude });
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
 function formatHour(time: string): string {
   const parts = time.split('T');
   if (parts.length < 2) return time;
@@ -63,6 +98,7 @@ export default function App() {
   const [hourly, setHourly] = useState<HourlyWeather[]>([]);
   const [rainState, setRainState] = useState<WeatherState>('loading');
   const [nextRain, setNextRain] = useState<RainEvent | null>(null);
+  const [favorites, setFavorites] = useState<WeatherLocation[]>([]);
   const requestSeq = useRef(0);
 
   const runHealthCheck = useCallback(async () => {
@@ -123,16 +159,23 @@ export default function App() {
     let cancelled = false;
     (async () => {
       let stored: WeatherLocation | null = null;
+      let favs: WeatherLocation[] = [];
       try {
-        const raw = await AsyncStorage.getItem(LOCATION_STORAGE_KEY);
+        const [raw, rawFavorites] = await Promise.all([
+          AsyncStorage.getItem(LOCATION_STORAGE_KEY),
+          AsyncStorage.getItem(FAVORITES_STORAGE_KEY),
+        ]);
         stored = parseStoredLocation(raw);
+        favs = parseStoredFavorites(rawFavorites);
       } catch {
         stored = null;
+        favs = [];
       }
       if (cancelled) return;
       if (stored !== null) {
         setSelectedLocation(stored);
       }
+      setFavorites(favs);
       setLocationHydrated(true);
     })();
     return () => {
@@ -149,6 +192,16 @@ export default function App() {
     if (loc.name === selectedLocation.name) return;
     setSelectedLocation(loc);
     AsyncStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(loc)).catch(() => {});
+  };
+
+  const isFavorite = favorites.some((f) => isSameLocation(f, selectedLocation));
+
+  const handleFavoriteToggle = () => {
+    const next = isFavorite
+      ? favorites.filter((f) => !isSameLocation(f, selectedLocation))
+      : [...favorites, { ...selectedLocation }];
+    setFavorites(next);
+    AsyncStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
   };
 
   return (
@@ -173,6 +226,44 @@ export default function App() {
           </Pressable>
         ))}
       </View>
+
+      {favorites.length > 0 && (
+        <>
+          <Text style={styles.favoritesTitle}>Favoriler</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.favoritesScroll}
+            contentContainerStyle={styles.favoritesContent}
+          >
+            {favorites.map((loc) => (
+              <Pressable
+                key={`${loc.name}-${loc.latitude}-${loc.longitude}`}
+                style={[
+                  styles.cityChip,
+                  isSameLocation(loc, selectedLocation) && styles.cityChipActive,
+                ]}
+                onPress={() => handleCitySelect(loc)}
+              >
+                <Text
+                  style={[
+                    styles.cityChipText,
+                    isSameLocation(loc, selectedLocation) && styles.cityChipTextActive,
+                  ]}
+                >
+                  {loc.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      )}
+
+      <Pressable style={styles.favoriteToggle} onPress={handleFavoriteToggle}>
+        <Text style={styles.favoriteToggleText}>
+          {isFavorite ? '★ Favorilerden çıkar' : '☆ Favoriye ekle'}
+        </Text>
+      </Pressable>
 
       {weatherState === 'loading' && <Text>Hava durumu yükleniyor...</Text>}
       {weatherState === 'error' && (
@@ -327,6 +418,36 @@ const styles = StyleSheet.create({
   },
   cityChipTextActive: {
     color: '#fff',
+  },
+  favoritesTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    marginTop: 12,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  favoritesScroll: {
+    width: '100%',
+  },
+  favoritesContent: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 16,
+  },
+  favoriteToggle: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  favoriteToggleText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#c2410c',
   },
   card: {
     backgroundColor: '#f2f6fa',
