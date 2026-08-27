@@ -342,6 +342,7 @@ export default function App() {
                   numberOfLines={1}
                   style={[
                     styles.cityChipText,
+                    styles.favoriteChipText,
                     isSameLocation(loc, selectedLocation) && styles.cityChipTextActive,
                   ]}
                 >
@@ -574,6 +575,11 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   favoriteChip: {
+    flexShrink: 0,
+    minWidth: 110,
+    alignItems: 'center',
+  },
+  favoriteChipText: {
     flexShrink: 0,
   },
   favoriteToggle: {
