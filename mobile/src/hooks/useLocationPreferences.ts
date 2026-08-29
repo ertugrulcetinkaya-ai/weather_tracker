@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   isSameLocation,
@@ -13,16 +13,20 @@ export function useLocationPreferences(defaultLocation: WeatherLocation) {
   const [favorites, setFavorites] = useState<WeatherLocation[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [persistenceError, setPersistenceError] = useState(false);
+  const selectionChangedRef = useRef(false);
+  const favoritesChangedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     void loadLocationPreferences()
       .then((preferences) => {
         if (cancelled) return;
-        if (preferences.selectedLocation !== null) {
+        if (!selectionChangedRef.current && preferences.selectedLocation !== null) {
           setSelectedLocation(preferences.selectedLocation);
         }
-        setFavorites(preferences.favorites);
+        if (!favoritesChangedRef.current) {
+          setFavorites(preferences.favorites);
+        }
       })
       .catch(() => {
         if (!cancelled) setPersistenceError(true);
@@ -36,12 +40,14 @@ export function useLocationPreferences(defaultLocation: WeatherLocation) {
   }, []);
 
   const selectLocation = useCallback((location: WeatherLocation) => {
+    selectionChangedRef.current = true;
     setSelectedLocation(location);
     setPersistenceError(false);
     void saveSelectedLocation(location).catch(() => setPersistenceError(true));
   }, []);
 
   const toggleFavorite = useCallback((location: WeatherLocation) => {
+    favoritesChangedRef.current = true;
     setPersistenceError(false);
     setFavorites((current) => {
       const exists = current.some((favorite) => isSameLocation(favorite, location));

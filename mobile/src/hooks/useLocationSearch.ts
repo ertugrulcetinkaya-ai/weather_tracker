@@ -23,8 +23,9 @@ export function useLocationSearch() {
 
     const controller = new AbortController();
     controllerRef.current = controller;
+    setResults([]);
+    setStatus('loading');
     const timer = setTimeout(() => {
-      setStatus('loading');
       void searchLocations(trimmed, controller.signal)
         .then((data) => {
           if (controller.signal.aborted) return;

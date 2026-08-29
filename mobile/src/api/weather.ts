@@ -66,10 +66,16 @@ function parseLocation(value: unknown): LocationSearchResult {
   if (
     !isRecord(value) ||
     typeof value.name !== 'string' ||
+    value.name.trim() === '' ||
     !isFiniteNumber(value.latitude) ||
+    value.latitude < -90 ||
+    value.latitude > 90 ||
     !isFiniteNumber(value.longitude) ||
+    value.longitude < -180 ||
+    value.longitude > 180 ||
     !(typeof value.admin1 === 'string' || value.admin1 === null) ||
-    typeof value.country !== 'string'
+    typeof value.country !== 'string' ||
+    value.country.trim() === ''
   ) {
     throw new Error('Unexpected location search response');
   }

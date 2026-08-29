@@ -23,7 +23,7 @@ union of required hourly fields once and derives all three UI sections from that
 - The mobile API client validates data at runtime instead of trusting TypeScript casts.
 - Screen refreshes and debounced searches abort superseded requests.
 - Invalid or duplicate persisted favorites are discarded during hydration.
-- CI enforces backend lint/tests and mobile strict TypeScript checks.
+- CI enforces backend lint/tests plus mobile strict TypeScript, unit tests, and coverage thresholds.
 
 ## Configuration
 
