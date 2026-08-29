@@ -1,9 +1,18 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
 
-from app.weather.models import CurrentWeather, HourlyWeather, LocationSearchResult
+from app.weather.models import (
+    CurrentWeather,
+    HourlyWeather,
+    LocationSearchResult,
+    WeatherOverview,
+)
+from app.weather.rain import find_next_rain_event, find_rain_events
 
 OPEN_METEO_ECMWF_BASE_URL = "https://api.open-meteo.com/v1/ecmwf"
 OPEN_METEO_GEOCODING_BASE_URL = "https://geocoding-api.open-meteo.com/v1/search"
@@ -27,59 +36,96 @@ HOURLY_FIELDS = (
     "wind_speed_10m",
 )
 
+OVERVIEW_FIELDS = CURRENT_FIELDS + ("precipitation",)
+
 
 class WeatherFetchError(Exception):
     pass
 
 
-def _select_hour_index(times: list, target: str) -> int:
+def _request_json(
+    url: str,
+    *,
+    params: dict[str, Any],
+    error_context: str,
+) -> dict[str, Any]:
     try:
-        return times.index(target)
-    except ValueError:
-        local_hour = target[-5:]
-        for index, value in enumerate(times):
-            if value[-5:] == local_hour:
-                return index
-    raise WeatherFetchError("Open-Meteo response does not include the current hour")
+        response = httpx.get(url, params=params, timeout=10.0)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise WeatherFetchError(f"{error_context}: {exc}") from exc
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise WeatherFetchError(f"{error_context}: response is not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise WeatherFetchError(f"{error_context}: response is not an object")
+    return payload
 
 
-def get_current_weather(
-    latitude: float = ELAZIG_LATITUDE,
-    longitude: float = ELAZIG_LONGITUDE,
-    location: str = ELAZIG_LOCATION,
-) -> CurrentWeather:
-    now = datetime.now(ZoneInfo(ELAZIG_TIMEZONE))
-    target_time = now.strftime("%Y-%m-%dT%H:00")
-    response = httpx.get(
+def _fetch_hourly_payload(
+    fields: tuple[str, ...],
+    *,
+    latitude: float,
+    longitude: float,
+) -> tuple[list[str], dict[str, list[Any]]]:
+    payload = _request_json(
         OPEN_METEO_ECMWF_BASE_URL,
         params={
             "latitude": latitude,
             "longitude": longitude,
-            "hourly": ",".join(CURRENT_FIELDS),
+            "hourly": ",".join(fields),
             "timezone": ELAZIG_TIMEZONE,
             "forecast_hours": 24,
         },
-        timeout=10.0,
+        error_context="Open-Meteo request failed",
     )
-    response.raise_for_status()
-    payload = response.json()
     hourly = payload.get("hourly")
     if not isinstance(hourly, dict):
         raise WeatherFetchError("Open-Meteo response is missing 'hourly'")
+
     times = hourly.get("time")
-    if not isinstance(times, list) or not times:
+    if (
+        not isinstance(times, list)
+        or not times
+        or any(not isinstance(value, str) for value in times)
+    ):
         raise WeatherFetchError("Open-Meteo response is missing 'hourly.time'")
-    for field in CURRENT_FIELDS:
+
+    validated: dict[str, list[Any]] = {}
+    for field in fields:
         values = hourly.get(field)
         if not isinstance(values, list) or len(values) != len(times):
-            raise WeatherFetchError(f"Open-Meteo response is missing hourly field: {field}")
+            raise WeatherFetchError(
+                f"Open-Meteo response is missing hourly field: {field}"
+            )
+        validated[field] = values
+    return times, validated
 
+
+def _require_number(value: Any, *, field: str, time: str) -> int | float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise WeatherFetchError(
+            f"Open-Meteo response is missing hourly value for {field} at {time}"
+        )
+    return value
+
+
+def _build_current_weather(
+    times: list[str],
+    hourly: dict[str, list[Any]],
+    *,
+    location: str,
+) -> CurrentWeather:
+    now = datetime.now(ZoneInfo(ELAZIG_TIMEZONE))
+    target_time = now.strftime("%Y-%m-%dT%H:00")
     index = _select_hour_index(times, target_time)
-    selected = {field: hourly[field][index] for field in CURRENT_FIELDS}
-    for field, value in selected.items():
-        if value is None:
-            raise WeatherFetchError(f"Open-Meteo response is missing current hour value for: {field}")
 
+    selected = {
+        field: _require_number(hourly[field][index], field=field, time=times[index])
+        for field in CURRENT_FIELDS
+    }
     return CurrentWeather(
         location=location,
         temperature=selected["temperature_2m"],
@@ -91,79 +137,97 @@ def get_current_weather(
     )
 
 
+def _build_hourly_weather(
+    times: list[str],
+    hourly: dict[str, list[Any]],
+) -> list[HourlyWeather]:
+    points: list[HourlyWeather] = []
+    for index, time in enumerate(times):
+        values = {
+            field: _require_number(hourly[field][index], field=field, time=time)
+            for field in HOURLY_FIELDS
+        }
+        points.append(
+            HourlyWeather(
+                time=time,
+                temperature=values["temperature_2m"],
+                precipitation=values["precipitation"],
+                weather_code=values["weather_code"],
+                wind_speed=values["wind_speed_10m"],
+            )
+        )
+    return points
+
+
+def _select_hour_index(times: list, target: str) -> int:
+    try:
+        return times.index(target)
+    except ValueError as exc:
+        raise WeatherFetchError(
+            "Open-Meteo response does not include the current hour"
+        ) from exc
+
+
+def get_current_weather(
+    latitude: float = ELAZIG_LATITUDE,
+    longitude: float = ELAZIG_LONGITUDE,
+    location: str = ELAZIG_LOCATION,
+) -> CurrentWeather:
+    times, hourly = _fetch_hourly_payload(
+        CURRENT_FIELDS,
+        latitude=latitude,
+        longitude=longitude,
+    )
+    return _build_current_weather(times, hourly, location=location)
+
+
 def fetch_hourly_weather(
     latitude: float = ELAZIG_LATITUDE,
     longitude: float = ELAZIG_LONGITUDE,
 ) -> list[HourlyWeather]:
-    try:
-        response = httpx.get(
-            OPEN_METEO_ECMWF_BASE_URL,
-            params={
-                "latitude": latitude,
-                "longitude": longitude,
-                "hourly": ",".join(HOURLY_FIELDS),
-                "timezone": ELAZIG_TIMEZONE,
-                "forecast_hours": 24,
-            },
-            timeout=10.0,
-        )
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise WeatherFetchError(f"Open-Meteo request failed: {exc}") from exc
+    times, hourly = _fetch_hourly_payload(
+        HOURLY_FIELDS,
+        latitude=latitude,
+        longitude=longitude,
+    )
+    return _build_hourly_weather(times, hourly)
 
-    payload = response.json()
-    hourly = payload.get("hourly")
-    if not isinstance(hourly, dict):
-        raise WeatherFetchError("Open-Meteo response is missing 'hourly'")
-    times = hourly.get("time")
-    if not isinstance(times, list) or not times:
-        raise WeatherFetchError("Open-Meteo response is missing 'hourly.time'")
-    for field in HOURLY_FIELDS:
-        values = hourly.get(field)
-        if not isinstance(values, list) or len(values) != len(times):
-            raise WeatherFetchError(f"Open-Meteo response is missing hourly field: {field}")
 
-    points: list[HourlyWeather] = []
-    for i in range(len(times)):
-        temperature = hourly["temperature_2m"][i]
-        precipitation = hourly["precipitation"][i]
-        weather_code = hourly["weather_code"][i]
-        wind_speed = hourly["wind_speed_10m"][i]
-        if any(v is None for v in (temperature, precipitation, weather_code, wind_speed)):
-            raise WeatherFetchError(f"Open-Meteo response is missing hourly value at {times[i]}")
-        points.append(HourlyWeather(
-            time=times[i],
-            temperature=temperature,
-            precipitation=precipitation,
-            weather_code=weather_code,
-            wind_speed=wind_speed,
-        ))
-    return points
+def get_weather_overview(
+    latitude: float = ELAZIG_LATITUDE,
+    longitude: float = ELAZIG_LONGITUDE,
+    location: str = ELAZIG_LOCATION,
+) -> WeatherOverview:
+    """Build the complete mobile screen from one upstream forecast request."""
+
+    times, hourly_payload = _fetch_hourly_payload(
+        OVERVIEW_FIELDS,
+        latitude=latitude,
+        longitude=longitude,
+    )
+    current = _build_current_weather(times, hourly_payload, location=location)
+    hourly = _build_hourly_weather(times, hourly_payload)
+    events = find_rain_events(hourly)
+    now = datetime.now(ZoneInfo(ELAZIG_TIMEZONE)).strftime("%Y-%m-%dT%H:%M")
+    return WeatherOverview(
+        current=current,
+        hourly=hourly,
+        next_rain=find_next_rain_event(events, now),
+    )
 
 
 def search_locations(query: str) -> list[LocationSearchResult]:
-    try:
-        response = httpx.get(
-            OPEN_METEO_GEOCODING_BASE_URL,
-            params={
-                "name": query,
-                "count": 8,
-                "language": "tr",
-                "format": "json",
-                "countryCode": "TR",
-            },
-            timeout=10.0,
-        )
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise WeatherFetchError(f"Open-Meteo geocoding request failed: {exc}") from exc
-
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise WeatherFetchError("Open-Meteo geocoding response is not valid JSON") from exc
-    if not isinstance(payload, dict):
-        raise WeatherFetchError("Open-Meteo geocoding response is not an object")
+    payload = _request_json(
+        OPEN_METEO_GEOCODING_BASE_URL,
+        params={
+            "name": query,
+            "count": 8,
+            "language": "tr",
+            "format": "json",
+            "countryCode": "TR",
+        },
+        error_context="Open-Meteo geocoding request failed",
+    )
 
     results = payload.get("results")
     if not isinstance(results, list):

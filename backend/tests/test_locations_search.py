@@ -1,6 +1,7 @@
+from unittest import mock
+
 import httpx
 from fastapi.testclient import TestClient
-from unittest import mock
 
 from app.main import app
 
@@ -152,6 +153,12 @@ def test_search_locations_missing_q():
 
 def test_search_locations_q_too_short():
     response = client.get("/locations/search", params={"q": "a"})
+
+    assert response.status_code == 422
+
+
+def test_search_locations_rejects_whitespace_only_query():
+    response = client.get("/locations/search", params={"q": "  "})
 
     assert response.status_code == 422
 

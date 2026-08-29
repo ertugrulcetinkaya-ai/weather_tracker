@@ -6,10 +6,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.weather.open_meteo import (
     ELAZIG_LATITUDE,
-    ELAZIG_LONGITUDE,
     ELAZIG_LOCATION,
-    get_current_weather,
-    fetch_hourly_weather,
+    ELAZIG_LONGITUDE,
 )
 
 client = TestClient(app)
@@ -154,4 +152,17 @@ def test_invalid_longitude_returns_422():
         "/weather/current",
         params={"latitude": ISTANBUL_LAT, "longitude": 200},
     )
+    assert response.status_code == 422
+
+
+def test_blank_location_name_returns_422():
+    response = client.get(
+        "/weather/current",
+        params={
+            "latitude": ISTANBUL_LAT,
+            "longitude": ISTANBUL_LON,
+            "location": " ",
+        },
+    )
+
     assert response.status_code == 422

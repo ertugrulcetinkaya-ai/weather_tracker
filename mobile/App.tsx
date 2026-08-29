@@ -1,83 +1,18 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { checkBackendHealth } from './src/api/health';
-import { fetchCurrentWeather, fetchHourlyWeather, fetchNextRainEvent, searchLocations } from './src/api/weather';
-import type { CurrentWeather, HourlyWeather, LocationSearchResult, RainEvent, WeatherLocation } from './src/types/weather';
+import { useLocationPreferences } from './src/hooks/useLocationPreferences';
+import { useLocationSearch } from './src/hooks/useLocationSearch';
+import { useWeatherOverview } from './src/hooks/useWeatherOverview';
+import { isSameLocation } from './src/storage/locations';
+import type { LocationSearchResult, WeatherLocation } from './src/types/weather';
 import { formatWeatherTime, getWeatherCondition } from './src/weather/condition';
-
-type ConnectionState = 'checking' | 'connected' | 'disconnected';
-type WeatherState = 'loading' | 'ready' | 'error';
 
 const WEATHER_LOCATIONS: WeatherLocation[] = [
   { name: 'Elazığ', latitude: 38.6743, longitude: 39.2232 },
   { name: 'İstanbul', latitude: 41.0082, longitude: 28.9784 },
   { name: 'Ankara', latitude: 39.9334, longitude: 32.8597 },
 ];
-
-const LOCATION_STORAGE_KEY = 'weather_tracker:selected_location';
-const FAVORITES_STORAGE_KEY = 'weather_tracker:favorite_locations';
-
-function isSameLocation(a: WeatherLocation, b: WeatherLocation): boolean {
-  return a.name === b.name && a.latitude === b.latitude && a.longitude === b.longitude;
-}
-
-function parseStoredLocation(raw: string | null): WeatherLocation | null {
-  if (raw === null) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    const candidate = parsed as Partial<WeatherLocation>;
-    if (
-      typeof candidate.name !== 'string' ||
-      typeof candidate.latitude !== 'number' ||
-      typeof candidate.longitude !== 'number' ||
-      !Number.isFinite(candidate.latitude) ||
-      !Number.isFinite(candidate.longitude) ||
-      candidate.latitude < -90 ||
-      candidate.latitude > 90 ||
-      candidate.longitude < -180 ||
-      candidate.longitude > 180
-    ) {
-      return null;
-    }
-    return { name: candidate.name, latitude: candidate.latitude, longitude: candidate.longitude };
-  } catch {
-    return null;
-  }
-}
-
-function parseStoredFavorites(raw: string | null): WeatherLocation[] {
-  if (raw === null) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const result: WeatherLocation[] = [];
-    for (const item of parsed) {
-      if (typeof item !== 'object' || item === null) continue;
-      const candidate = item as Partial<WeatherLocation>;
-      if (
-        typeof candidate.name !== 'string' ||
-        typeof candidate.latitude !== 'number' ||
-        typeof candidate.longitude !== 'number' ||
-        !Number.isFinite(candidate.latitude) ||
-        !Number.isFinite(candidate.longitude) ||
-        candidate.latitude < -90 ||
-        candidate.latitude > 90 ||
-        candidate.longitude < -180 ||
-        candidate.longitude > 180
-      ) {
-        continue;
-      }
-      result.push({ name: candidate.name, latitude: candidate.latitude, longitude: candidate.longitude });
-    }
-    return result;
-  } catch {
-    return [];
-  }
-}
 
 function formatHour(time: string): string {
   const parts = time.split('T');
@@ -89,150 +24,23 @@ function formatHour(time: string): string {
 }
 
 export default function App() {
-  const [connection, setConnection] = useState<ConnectionState>('checking');
-  const [selectedLocation, setSelectedLocation] = useState<WeatherLocation>(WEATHER_LOCATIONS[0]);
-  const [locationHydrated, setLocationHydrated] = useState(false);
-  const [weatherState, setWeatherState] = useState<WeatherState>('loading');
-  const [weather, setWeather] = useState<CurrentWeather | null>(null);
-  const [hourlyState, setHourlyState] = useState<WeatherState>('loading');
-  const [hourly, setHourly] = useState<HourlyWeather[]>([]);
-  const [rainState, setRainState] = useState<WeatherState>('loading');
-  const [nextRain, setNextRain] = useState<RainEvent | null>(null);
-  const [favorites, setFavorites] = useState<WeatherLocation[]>([]);
-  const requestSeq = useRef(0);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<LocationSearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [searchCompleted, setSearchCompleted] = useState(false);
-  const searchSeq = useRef(0);
-
-  const runHealthCheck = useCallback(async () => {
-    setConnection('checking');
-    try {
-      await checkBackendHealth();
-      setConnection('connected');
-    } catch {
-      setConnection('disconnected');
-    }
-  }, []);
-
-  const refreshWeather = useCallback(async (loc: WeatherLocation) => {
-    const requestId = ++requestSeq.current;
-    setWeatherState('loading');
-    setHourlyState('loading');
-    setRainState('loading');
-
-    fetchCurrentWeather(loc)
-      .then((data) => {
-        if (requestId !== requestSeq.current) return;
-        setWeather(data);
-        setWeatherState('ready');
-      })
-      .catch(() => {
-        if (requestId !== requestSeq.current) return;
-        setWeatherState('error');
-      });
-
-    fetchHourlyWeather(loc)
-      .then((data) => {
-        if (requestId !== requestSeq.current) return;
-        setHourly(data);
-        setHourlyState('ready');
-      })
-      .catch(() => {
-        if (requestId !== requestSeq.current) return;
-        setHourlyState('error');
-      });
-
-    fetchNextRainEvent(loc)
-      .then((data) => {
-        if (requestId !== requestSeq.current) return;
-        setNextRain(data);
-        setRainState('ready');
-      })
-      .catch(() => {
-        if (requestId !== requestSeq.current) return;
-        setRainState('error');
-      });
-  }, []);
-
-  useEffect(() => {
-    runHealthCheck();
-  }, [runHealthCheck]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let stored: WeatherLocation | null = null;
-      let favs: WeatherLocation[] = [];
-      try {
-        const [raw, rawFavorites] = await Promise.all([
-          AsyncStorage.getItem(LOCATION_STORAGE_KEY),
-          AsyncStorage.getItem(FAVORITES_STORAGE_KEY),
-        ]);
-        stored = parseStoredLocation(raw);
-        favs = parseStoredFavorites(rawFavorites);
-      } catch {
-        stored = null;
-        favs = [];
-      }
-      if (cancelled) return;
-      if (stored !== null) {
-        setSelectedLocation(stored);
-      }
-      setFavorites(favs);
-      setLocationHydrated(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!locationHydrated) return;
-    refreshWeather(selectedLocation);
-  }, [locationHydrated, selectedLocation, refreshWeather]);
-
-  useEffect(() => {
-    const trimmed = searchQuery.trim();
-    if (trimmed.length < 2) {
-      searchSeq.current += 1;
-      setSearchResults([]);
-      setSearchLoading(false);
-      setSearchError(null);
-      setSearchCompleted(false);
-      return;
-    }
-    const timer = setTimeout(() => {
-      const requestId = ++searchSeq.current;
-      setSearchLoading(true);
-      setSearchError(null);
-      setSearchCompleted(false);
-      searchLocations(trimmed)
-        .then((results) => {
-          if (requestId !== searchSeq.current) return;
-          setSearchResults(results);
-          setSearchLoading(false);
-          setSearchCompleted(true);
-        })
-        .catch(() => {
-          if (requestId !== searchSeq.current) return;
-          setSearchResults([]);
-          setSearchError('Arama yapılamadı.');
-          setSearchLoading(false);
-          setSearchCompleted(true);
-        });
-    }, 350);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [searchQuery]);
+  const {
+    favorites,
+    hydrated,
+    persistenceError,
+    selectedLocation,
+    selectLocation,
+    toggleFavorite,
+  } = useLocationPreferences(WEATHER_LOCATIONS[0]);
+  const search = useLocationSearch();
+  const { overview, refresh, status: overviewStatus } = useWeatherOverview(
+    selectedLocation,
+    hydrated
+  );
 
   const handleCitySelect = (loc: WeatherLocation) => {
-    if (loc.name === selectedLocation.name) return;
-    setSelectedLocation(loc);
-    AsyncStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(loc)).catch(() => {});
+    if (isSameLocation(loc, selectedLocation)) return;
+    selectLocation(loc);
   };
 
   const handleSearchSelect = (result: LocationSearchResult) => {
@@ -242,39 +50,37 @@ export default function App() {
       longitude: result.longitude,
     };
     handleCitySelect(location);
-    searchSeq.current += 1;
-    setSearchQuery('');
-    setSearchResults([]);
-    setSearchError(null);
-    setSearchLoading(false);
-    setSearchCompleted(false);
+    search.reset();
   };
 
   const isFavorite = favorites.some((f) => isSameLocation(f, selectedLocation));
 
   const handleFavoriteToggle = () => {
-    const next = isFavorite
-      ? favorites.filter((f) => !isSameLocation(f, selectedLocation))
-      : [...favorites, { ...selectedLocation }];
-    setFavorites(next);
-    AsyncStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+    toggleFavorite(selectedLocation);
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       <Text style={styles.title}>Hava Takip</Text>
 
       <View style={styles.cityRow}>
         {WEATHER_LOCATIONS.map((loc) => (
           <Pressable
             key={loc.name}
-            style={[styles.cityChip, loc.name === selectedLocation.name && styles.cityChipActive]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSameLocation(loc, selectedLocation) }}
+            style={[styles.cityChip, isSameLocation(loc, selectedLocation) && styles.cityChipActive]}
             onPress={() => handleCitySelect(loc)}
           >
             <Text
               style={[
                 styles.cityChipText,
-                loc.name === selectedLocation.name && styles.cityChipTextActive,
+                isSameLocation(loc, selectedLocation) && styles.cityChipTextActive,
               ]}
             >
               {loc.name}
@@ -285,28 +91,29 @@ export default function App() {
 
       <View style={styles.searchBox}>
         <TextInput
+          accessibilityLabel="Konum ara"
+          autoCorrect={false}
           style={styles.searchInput}
           placeholder="Şehir veya yer ara"
           placeholderTextColor="#999"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
+          returnKeyType="search"
+          value={search.query}
+          onChangeText={search.setQuery}
         />
       </View>
-      {searchLoading && <Text style={styles.searchStatus}>Aranıyor...</Text>}
-      {searchError !== null && !searchLoading && (
-        <Text style={styles.searchStatus}>{searchError}</Text>
+      {search.status === 'loading' && <Text style={styles.searchStatus}>Aranıyor...</Text>}
+      {search.status === 'error' && (
+        <Text accessibilityRole="alert" style={styles.searchStatus}>Arama yapılamadı.</Text>
       )}
-      {!searchLoading &&
-        searchError === null &&
-        searchCompleted &&
-        searchResults.length === 0 && (
-          <Text style={styles.searchStatus}>Sonuç bulunamadı.</Text>
-        )}
-      {searchResults.length > 0 && (
+      {search.status === 'ready' && search.results.length === 0 && (
+        <Text style={styles.searchStatus}>Sonuç bulunamadı.</Text>
+      )}
+      {search.results.length > 0 && (
         <View style={styles.searchResults}>
-          {searchResults.map((result) => (
+          {search.results.map((result) => (
             <Pressable
               key={`${result.name}-${result.latitude}-${result.longitude}`}
+              accessibilityRole="button"
               style={styles.searchResultRow}
               onPress={() => handleSearchSelect(result)}
             >
@@ -331,6 +138,8 @@ export default function App() {
             {favorites.map((loc) => (
               <Pressable
                 key={`${loc.name}-${loc.latitude}-${loc.longitude}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSameLocation(loc, selectedLocation) }}
                 style={[
                   styles.cityChip,
                   styles.favoriteChip,
@@ -354,135 +163,140 @@ export default function App() {
         </>
       )}
 
-      <Pressable style={styles.favoriteToggle} onPress={handleFavoriteToggle}>
+      <Pressable
+        accessibilityRole="button"
+        style={styles.favoriteToggle}
+        onPress={handleFavoriteToggle}
+      >
         <Text style={styles.favoriteToggleText}>
           {isFavorite ? '★ Favorilerden çıkar' : '☆ Favoriye ekle'}
         </Text>
       </Pressable>
 
-      {weatherState === 'loading' && <Text>Hava durumu yükleniyor...</Text>}
-      {weatherState === 'error' && (
-        <>
-          <Text>Hava durumu alınamadı.</Text>
-          <Button title="Tekrar Dene" onPress={() => refreshWeather(selectedLocation)} />
-        </>
+      {persistenceError && (
+        <Text accessibilityRole="alert" style={styles.persistenceError}>
+          Konum tercihleri bu cihazda kaydedilemedi.
+        </Text>
       )}
-      {weatherState === 'ready' && weather !== null && (
+
+      {(!hydrated || overviewStatus === 'idle' || overviewStatus === 'loading') && (
+        <Text style={styles.loadingStatus}>Hava durumu yükleniyor...</Text>
+      )}
+      {overviewStatus === 'error' && (
+        <View style={styles.errorState}>
+          <Text accessibilityRole="alert" style={styles.errorText}>
+            Hava durumu alınamadı.
+          </Text>
+          <Button title="Tekrar Dene" onPress={() => void refresh()} />
+        </View>
+      )}
+      {overviewStatus === 'ready' && overview !== null && (
         <View style={styles.card}>
-          <Text style={styles.emoji}>{getWeatherCondition(weather.weather_code).emoji}</Text>
-          <Text style={styles.location}>{weather.location.toUpperCase()}</Text>
-          <Text style={styles.temperature}>{Math.round(weather.temperature)}°</Text>
+          <Text style={styles.emoji}>
+            {getWeatherCondition(overview.current.weather_code).emoji}
+          </Text>
+          <Text style={styles.location}>{overview.current.location.toUpperCase()}</Text>
+          <Text style={styles.temperature}>{Math.round(overview.current.temperature)}°</Text>
           <Text style={styles.condition}>
-            {getWeatherCondition(weather.weather_code).label}
+            {getWeatherCondition(overview.current.weather_code).label}
           </Text>
           <Text style={styles.apparent}>
-            Hissedilen {Math.round(weather.apparent_temperature)}°
+            Hissedilen {Math.round(overview.current.apparent_temperature)}°
           </Text>
-          <Text style={styles.updatedAt}>{formatWeatherTime(weather.time)}</Text>
+          <Text style={styles.updatedAt}>{formatWeatherTime(overview.current.time)}</Text>
           <View style={styles.divider} />
           <View style={styles.row}>
             <View style={styles.metric}>
               <Text style={styles.metricLabel}>Nem</Text>
-              <Text style={styles.metricValue}>%{weather.humidity}</Text>
+              <Text style={styles.metricValue}>%{overview.current.humidity}</Text>
             </View>
             <View style={styles.metric}>
               <Text style={styles.metricLabel}>Rüzgâr</Text>
-              <Text style={styles.metricValue}>{weather.wind_speed} km/s</Text>
+              <Text style={styles.metricValue}>{overview.current.wind_speed} km/s</Text>
             </View>
           </View>
         </View>
       )}
 
-      {rainState === 'loading' && (
-        <Text style={styles.status}>Yağış tahmini yükleniyor...</Text>
-      )}
-      {rainState === 'error' && (
-        <Text style={styles.status}>Yağış bilgisi alınamadı.</Text>
-      )}
-      {rainState === 'ready' && (
+      {overviewStatus === 'ready' && overview !== null && (
         <>
-        <Text style={styles.rainTitle}>Sıradaki Yağış</Text>
-        <View style={styles.rainCard}>
-          {nextRain !== null ? (
-            <>
-              <Text style={styles.rainEmoji}>🌧️</Text>
-              <Text style={styles.rainTime}>
-                {formatHour(nextRain.start_time)} – {formatHour(nextRain.end_time)}
-              </Text>
-              <Text style={styles.rainDetail}>
-                Toplam {Number(nextRain.total_precipitation.toFixed(2))} mm
-              </Text>
-              <Text style={styles.rainDetail}>
-                En yoğun: {formatHour(nextRain.peak_time)}
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.rainEmoji}>☀️</Text>
-              <Text style={styles.rainDetail}>
-                Önümüzdeki 24 saatte yağış beklenmiyor.
-              </Text>
-            </>
-          )}
-        </View>
+          <Text style={styles.rainTitle}>Sıradaki Yağış</Text>
+          <View style={styles.rainCard}>
+            {overview.next_rain !== null ? (
+              <>
+                <Text style={styles.rainEmoji}>🌧️</Text>
+                <Text style={styles.rainTime}>
+                  {formatHour(overview.next_rain.start_time)} –{' '}
+                  {formatHour(overview.next_rain.end_time)}
+                </Text>
+                <Text style={styles.rainDetail}>
+                  Toplam {Number(overview.next_rain.total_precipitation.toFixed(2))} mm
+                </Text>
+                <Text style={styles.rainDetail}>
+                  En yoğun: {formatHour(overview.next_rain.peak_time)}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.rainEmoji}>☀️</Text>
+                <Text style={styles.rainDetail}>
+                  Önümüzdeki 24 saatte yağış beklenmiyor.
+                </Text>
+              </>
+            )}
+          </View>
         </>
       )}
 
-      <Text style={styles.hourlyTitle}>Saatlik Tahmin</Text>
-
-      {hourlyState === 'loading' && (
-        <Text style={styles.status}>Saatlik tahmin yükleniyor...</Text>
-      )}
-
-      {hourlyState === 'error' && (
-        <Text style={styles.status}>Saatlik tahmin alınamadı.</Text>
-      )}
-
-      {hourlyState === 'ready' && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.hourlyScroll}
-          contentContainerStyle={styles.hourlyContent}
-        >
-          {hourly.map((h) => (
-            <View key={h.time} style={styles.hourlyCard}>
-              <Text style={styles.hourlyTime}>
-                {h.time.slice(11, 16)}
-              </Text>
-              <Text style={styles.hourlyEmoji}>
-                {getWeatherCondition(h.weather_code).emoji}
-              </Text>
-              <Text style={styles.hourlyTemperature}>
-                {Math.round(h.temperature)}°C
-              </Text>
-              <Text style={styles.hourlyPrecipitation}>
-                {h.precipitation} mm
-              </Text>
-            </View>
-          ))}
-        </ScrollView>
+      {overviewStatus === 'ready' && overview !== null && (
+        <>
+          <Text style={styles.hourlyTitle}>Saatlik Tahmin</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.hourlyScroll}
+            contentContainerStyle={styles.hourlyContent}
+          >
+            {overview.hourly.map((hour) => (
+              <View key={hour.time} style={styles.hourlyCard}>
+                <Text style={styles.hourlyTime}>{hour.time.slice(11, 16)}</Text>
+                <Text style={styles.hourlyEmoji}>
+                  {getWeatherCondition(hour.weather_code).emoji}
+                </Text>
+                <Text style={styles.hourlyTemperature}>
+                  {Math.round(hour.temperature)}°C
+                </Text>
+                <Text style={styles.hourlyPrecipitation}>{hour.precipitation} mm</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </>
       )}
 
       <Text style={styles.status}>
-        {connection === 'checking'
-          ? 'Backend kontrol ediliyor...'
-          : connection === 'connected'
-            ? 'Backend: Bağlı'
-            : 'Backend: Bağlantı Yok'}
+        {overviewStatus === 'ready'
+          ? 'Backend: Bağlı'
+          : overviewStatus === 'error'
+            ? 'Backend: Bağlantı Yok'
+            : 'Backend kontrol ediliyor...'}
       </Text>
       <StatusBar style="auto" />
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  container: {
+    flexGrow: 1,
+    backgroundColor: '#fff',
     alignItems: 'center',
-    justifyContent: 'center',
     padding: 24,
+    paddingBottom: 40,
   },
   title: {
     fontSize: 24,
@@ -601,6 +415,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#c2410c',
+  },
+  persistenceError: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#b91c1c',
+  },
+  loadingStatus: {
+    marginVertical: 32,
+    color: '#555',
+  },
+  errorState: {
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 32,
+  },
+  errorText: {
+    color: '#b91c1c',
   },
   card: {
     backgroundColor: '#f2f6fa',

@@ -29,6 +29,12 @@ export type RainEvent = {
   peak_time: string;
 };
 
+export type WeatherOverview = {
+  current: CurrentWeather;
+  hourly: HourlyWeather[];
+  next_rain: RainEvent | null;
+};
+
 export type LocationSearchResult = {
   name: string;
   latitude: number;

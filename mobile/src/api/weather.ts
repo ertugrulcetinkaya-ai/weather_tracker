@@ -4,92 +4,109 @@ import type {
   LocationSearchResult,
   RainEvent,
   WeatherLocation,
+  WeatherOverview,
 } from '../types/weather';
 
-import { BACKEND_URL } from './config';
+import { requestJson } from './client';
 
-function coordsQuery(location: WeatherLocation): string {
-  return `latitude=${location.latitude}&longitude=${location.longitude}`;
+type JsonRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export async function fetchCurrentWeather(location?: WeatherLocation): Promise<CurrentWeather> {
-  const qs = location
-    ? `?${coordsQuery(location)}&location=${encodeURIComponent(location.name)}`
-    : '';
-  const response = await fetch(`${BACKEND_URL}/weather/current${qs}`);
-  if (!response.ok) {
-    throw new Error(`Weather request failed with status ${response.status}`);
-  }
-  const data = (await response.json()) as CurrentWeather;
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function parseCurrentWeather(value: unknown): CurrentWeather {
   if (
-    typeof data.location !== 'string' ||
-    typeof data.temperature !== 'number' ||
-    typeof data.apparent_temperature !== 'number' ||
-    typeof data.humidity !== 'number' ||
-    typeof data.wind_speed !== 'number' ||
-    typeof data.weather_code !== 'number' ||
-    typeof data.time !== 'string'
+    !isRecord(value) ||
+    typeof value.location !== 'string' ||
+    !isFiniteNumber(value.temperature) ||
+    !isFiniteNumber(value.apparent_temperature) ||
+    !isFiniteNumber(value.humidity) ||
+    !isFiniteNumber(value.wind_speed) ||
+    !isFiniteNumber(value.weather_code) ||
+    typeof value.time !== 'string'
   ) {
-    throw new Error('Unexpected weather response');
+    throw new Error('Unexpected current weather response');
   }
-  return data;
+  return value as CurrentWeather;
 }
 
-export async function fetchHourlyWeather(location?: WeatherLocation): Promise<HourlyWeather[]> {
-  const qs = location ? `?${coordsQuery(location)}` : '';
-  const response = await fetch(`${BACKEND_URL}/weather/hourly${qs}`);
-  if (!response.ok) {
-    throw new Error(`Hourly weather request failed with status ${response.status}`);
-  }
-  const data = (await response.json()) as HourlyWeather[];
+function parseHourlyWeather(value: unknown): HourlyWeather {
   if (
-    !Array.isArray(data) ||
-    data.length === 0 ||
-    data.some(
-      (item) =>
-        typeof item.time !== 'string' ||
-        typeof item.temperature !== 'number' ||
-        typeof item.precipitation !== 'number' ||
-        typeof item.weather_code !== 'number' ||
-        typeof item.wind_speed !== 'number'
-    )
+    !isRecord(value) ||
+    typeof value.time !== 'string' ||
+    !isFiniteNumber(value.temperature) ||
+    !isFiniteNumber(value.precipitation) ||
+    !isFiniteNumber(value.weather_code) ||
+    !isFiniteNumber(value.wind_speed)
   ) {
     throw new Error('Unexpected hourly weather response');
   }
-  return data;
+  return value as HourlyWeather;
 }
 
-export async function fetchNextRainEvent(location?: WeatherLocation): Promise<RainEvent | null> {
-  const qs = location ? `?${coordsQuery(location)}` : '';
-  const response = await fetch(`${BACKEND_URL}/weather/rain/next${qs}`);
-  if (!response.ok) {
-    throw new Error(`Rain event request failed with status ${response.status}`);
-  }
-  const data = (await response.json()) as RainEvent | null;
-  if (data === null) {
-    return null;
-  }
+function parseRainEvent(value: unknown): RainEvent {
   if (
-    typeof data.start_time !== 'string' ||
-    typeof data.end_time !== 'string' ||
-    typeof data.total_precipitation !== 'number' ||
-    typeof data.peak_time !== 'string'
+    !isRecord(value) ||
+    typeof value.start_time !== 'string' ||
+    typeof value.end_time !== 'string' ||
+    !isFiniteNumber(value.total_precipitation) ||
+    typeof value.peak_time !== 'string'
   ) {
     throw new Error('Unexpected rain event response');
   }
-  return data;
+  return value as RainEvent;
 }
 
-export async function searchLocations(query: string): Promise<LocationSearchResult[]> {
-  const response = await fetch(
-    `${BACKEND_URL}/locations/search?q=${encodeURIComponent(query)}`
-  );
-  if (!response.ok) {
-    throw new Error(`Location search request failed with status ${response.status}`);
+function parseLocation(value: unknown): LocationSearchResult {
+  if (
+    !isRecord(value) ||
+    typeof value.name !== 'string' ||
+    !isFiniteNumber(value.latitude) ||
+    !isFiniteNumber(value.longitude) ||
+    !(typeof value.admin1 === 'string' || value.admin1 === null) ||
+    typeof value.country !== 'string'
+  ) {
+    throw new Error('Unexpected location search response');
   }
-  const data = (await response.json()) as LocationSearchResult[];
+  return value as LocationSearchResult;
+}
+
+function locationQuery(location: WeatherLocation): string {
+  return new URLSearchParams({
+    latitude: String(location.latitude),
+    longitude: String(location.longitude),
+    location: location.name,
+  }).toString();
+}
+
+export async function fetchWeatherOverview(
+  location: WeatherLocation,
+  signal?: AbortSignal
+): Promise<WeatherOverview> {
+  const data = await requestJson(`/weather/overview?${locationQuery(location)}`, { signal });
+  if (!isRecord(data) || !Array.isArray(data.hourly) || data.hourly.length === 0) {
+    throw new Error('Unexpected weather overview response');
+  }
+  return {
+    current: parseCurrentWeather(data.current),
+    hourly: data.hourly.map(parseHourlyWeather),
+    next_rain: data.next_rain === null ? null : parseRainEvent(data.next_rain),
+  };
+}
+
+export async function searchLocations(
+  query: string,
+  signal?: AbortSignal
+): Promise<LocationSearchResult[]> {
+  const params = new URLSearchParams({ q: query });
+  const data = await requestJson(`/locations/search?${params.toString()}`, { signal });
   if (!Array.isArray(data)) {
     throw new Error('Unexpected location search response');
   }
-  return data;
+  return data.map(parseLocation);
 }

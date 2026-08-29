@@ -1,17 +1,13 @@
-import { BACKEND_URL } from './config';
+import { requestJson } from './client';
 
 export type HealthResponse = {
   status: 'ok';
 };
 
 export async function checkBackendHealth(): Promise<HealthResponse> {
-  const response = await fetch(`${BACKEND_URL}/health`);
-  if (!response.ok) {
-    throw new Error(`Health check failed with status ${response.status}`);
-  }
-  const data = (await response.json()) as HealthResponse;
-  if (data.status !== 'ok') {
+  const data = await requestJson('/health');
+  if (typeof data !== 'object' || data === null || !('status' in data) || data.status !== 'ok') {
     throw new Error('Unexpected health response');
   }
-  return data;
+  return { status: 'ok' };
 }

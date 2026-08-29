@@ -1,6 +1,8 @@
-import httpx
-from fastapi.testclient import TestClient
 from unittest import mock
+
+import httpx
+import pytest
+from fastapi.testclient import TestClient
 
 from app.main import app
 from app.weather.open_meteo import WeatherFetchError, fetch_hourly_weather
@@ -89,11 +91,8 @@ def test_fetch_hourly_weather_missing_hourly_time():
     with mock.patch(
         "app.weather.open_meteo.httpx.get", return_value=_mock_response(payload)
     ):
-        try:
+        with pytest.raises(WeatherFetchError, match="hourly.time"):
             fetch_hourly_weather()
-            assert False, "WeatherFetchError bekleniyordu"
-        except WeatherFetchError as error:
-            assert "hourly.time" in str(error)
 
 
 def test_hourly_weather_http_error():

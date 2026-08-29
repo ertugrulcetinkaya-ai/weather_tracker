@@ -101,3 +101,21 @@ def test_weather_current_hour_not_in_times_raises():
     ):
         with pytest.raises(WeatherFetchError):
             get_current_weather()
+
+
+def test_weather_current_does_not_match_same_hour_on_another_day():
+    times = ["2026-08-25T15:00", "2026-08-25T16:00"]
+    payload = _hourly_payload(
+        times,
+        temperature_2m=[27.9, 27.5],
+        relative_humidity_2m=[45, 48],
+        apparent_temperature=[28.8, 28.4],
+        weather_code=[2, 3],
+        wind_speed_10m=[15.5, 16.0],
+    )
+    with patch("app.weather.open_meteo.datetime", _FixedDatetime), patch(
+        "app.weather.open_meteo.httpx.get",
+        return_value=_mock_response(payload),
+    ):
+        with pytest.raises(WeatherFetchError, match="current hour"):
+            get_current_weather()
