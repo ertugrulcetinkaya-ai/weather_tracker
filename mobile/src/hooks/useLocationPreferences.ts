@@ -14,7 +14,8 @@ export function useLocationPreferences(defaultLocation: WeatherLocation) {
   const [hydrated, setHydrated] = useState(false);
   const [persistenceError, setPersistenceError] = useState(false);
   const selectionChangedRef = useRef(false);
-  const favoritesChangedRef = useRef(false);
+  const favoritesHydrationRef = useRef<'pending' | 'succeeded' | 'failed'>('pending');
+  const pendingFavoriteTogglesRef = useRef<WeatherLocation[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,12 +25,28 @@ export function useLocationPreferences(defaultLocation: WeatherLocation) {
         if (!selectionChangedRef.current && preferences.selectedLocation !== null) {
           setSelectedLocation(preferences.selectedLocation);
         }
-        if (!favoritesChangedRef.current) {
+        if (pendingFavoriteTogglesRef.current.length === 0) {
           setFavorites(preferences.favorites);
+        } else {
+          const reconciledFavorites = pendingFavoriteTogglesRef.current.reduce(
+            (current, location) => {
+              const exists = current.some((favorite) => isSameLocation(favorite, location));
+              return exists
+                ? current.filter((favorite) => !isSameLocation(favorite, location))
+                : [...current, { ...location }];
+            },
+            preferences.favorites
+          );
+          setFavorites(reconciledFavorites);
+          void saveFavorites(reconciledFavorites).catch(() => setPersistenceError(true));
         }
+        favoritesHydrationRef.current = 'succeeded';
       })
       .catch(() => {
-        if (!cancelled) setPersistenceError(true);
+        if (!cancelled) {
+          favoritesHydrationRef.current = 'failed';
+          setPersistenceError(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setHydrated(true);
@@ -47,14 +64,21 @@ export function useLocationPreferences(defaultLocation: WeatherLocation) {
   }, []);
 
   const toggleFavorite = useCallback((location: WeatherLocation) => {
-    favoritesChangedRef.current = true;
-    setPersistenceError(false);
+    const hydrationStatus = favoritesHydrationRef.current;
+    if (hydrationStatus === 'pending') {
+      pendingFavoriteTogglesRef.current.push({ ...location });
+    }
+    if (hydrationStatus !== 'failed') {
+      setPersistenceError(false);
+    }
     setFavorites((current) => {
       const exists = current.some((favorite) => isSameLocation(favorite, location));
       const next = exists
         ? current.filter((favorite) => !isSameLocation(favorite, location))
         : [...current, { ...location }];
-      void saveFavorites(next).catch(() => setPersistenceError(true));
+      if (hydrationStatus === 'succeeded') {
+        void saveFavorites(next).catch(() => setPersistenceError(true));
+      }
       return next;
     });
   }, []);
