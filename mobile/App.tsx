@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { Button, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Button, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CurrentWeatherCard } from './src/components/CurrentWeatherCard';
 import { DailyForecast } from './src/components/DailyForecast';
 import { NextRainCard } from './src/components/NextRainCard';
