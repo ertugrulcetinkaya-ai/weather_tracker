@@ -10,6 +10,7 @@ describe('HourlyForecast', () => {
       time: '2024-06-01T13:00',
       temperature: 21.4,
       precipitation: 0,
+      precipitation_probability: 0,
       weather_code: 0,
       wind_speed: 5.2,
     },
@@ -17,6 +18,7 @@ describe('HourlyForecast', () => {
       time: '2024-06-01T14:00',
       temperature: 19.6,
       precipitation: 1.2,
+      precipitation_probability: 35,
       weather_code: 61,
       wind_speed: 8.7,
     },
@@ -39,6 +41,10 @@ describe('HourlyForecast', () => {
     // Precipitation.
     expect(getByText('0 mm')).toBeTruthy();
     expect(getByText('1.2 mm')).toBeTruthy();
+
+    // Precipitation probability straight from the provider.
+    expect(getByText('Yağış %0')).toBeTruthy();
+    expect(getByText('Yağış %35')).toBeTruthy();
 
     // WMO-mapped emoji representations: code 0 -> ☀️, code 61 -> 🌧️.
     expect(getAllByText('☀️')).toHaveLength(1);

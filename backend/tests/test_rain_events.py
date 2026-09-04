@@ -14,6 +14,7 @@ def _hour(time: str, precipitation: float) -> HourlyWeather:
         time=time,
         temperature=25.0,
         precipitation=precipitation,
+        precipitation_probability=0,
         weather_code=1,
         wind_speed=5.0,
     )
@@ -125,6 +126,7 @@ def _hourly_payload(times, precipitations):
             "time": times,
             "temperature_2m": [25.0] * len(times),
             "precipitation": precipitations,
+            "precipitation_probability": [0] * len(times),
             "weather_code": [1] * len(times),
             "wind_speed_10m": [5.0] * len(times),
         }

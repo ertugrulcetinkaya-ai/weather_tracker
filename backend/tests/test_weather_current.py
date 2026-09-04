@@ -5,7 +5,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.weather.open_meteo import OPEN_METEO_ECMWF_BASE_URL, WeatherFetchError, get_current_weather
+from app.weather.open_meteo import (
+    OPEN_METEO_FORECAST_BASE_URL,
+    WeatherFetchError,
+    get_current_weather,
+)
 
 client = TestClient(app)
 
@@ -58,12 +62,13 @@ def test_weather_current_success():
     }
 
     args, kwargs = mock_get.call_args
-    assert args[0] == OPEN_METEO_ECMWF_BASE_URL
+    assert args[0] == OPEN_METEO_FORECAST_BASE_URL
     assert kwargs["params"] == {
         "latitude": 38.6743,
         "longitude": 39.2232,
         "hourly": "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
         "timezone": "Europe/Istanbul",
+        "forecast_days": 7,
         "forecast_hours": 24,
     }
 

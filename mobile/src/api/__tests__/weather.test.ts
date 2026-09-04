@@ -7,6 +7,32 @@ jest.mock('../client', () => ({
 
 const mockedRequestJson = jest.mocked(requestJson);
 
+const hourly = Array.from({ length: 24 }, (_unused, index) => ({
+  time: `2026-08-30T${String(index).padStart(2, '0')}:00`,
+  temperature: 24.5,
+  precipitation: 0,
+  precipitation_probability: 35,
+  weather_code: 2,
+  wind_speed: 12.2,
+}));
+
+const daily = [
+  '2026-08-30',
+  '2026-08-31',
+  '2026-09-01',
+  '2026-09-02',
+  '2026-09-03',
+  '2026-09-04',
+  '2026-09-05',
+].map((date) => ({
+  date,
+  temperature_max: 30.5,
+  temperature_min: 18.25,
+  precipitation: 0,
+  precipitation_probability: 35,
+  weather_code: 2,
+}));
+
 const overviewPayload = {
   current: {
     location: 'İstanbul',
@@ -17,17 +43,24 @@ const overviewPayload = {
     weather_code: 2,
     time: '2026-08-30T12:00',
   },
-  hourly: [
-    {
-      time: '2026-08-30T12:00',
-      temperature: 24.5,
-      precipitation: 0,
-      weather_code: 2,
-      wind_speed: 12.2,
-    },
-  ],
+  hourly,
+  daily,
   next_rain: null,
 };
+
+function withHourly(mutate: (record: Record<string, unknown>) => Record<string, unknown>) {
+  return {
+    ...overviewPayload,
+    hourly: hourly.map((record) => mutate({ ...record })),
+  };
+}
+
+function withDaily(mutate: (record: Record<string, unknown>) => Record<string, unknown>) {
+  return {
+    ...overviewPayload,
+    daily: daily.map((record) => mutate({ ...record })),
+  };
+}
 
 beforeEach(() => {
   mockedRequestJson.mockReset();
@@ -55,14 +88,81 @@ describe('weather API contract', () => {
     expect(path).toContain('location=%C4%B0stanbul+Avrupa');
   });
 
+  test('accepts integral probabilities at the range boundaries', async () => {
+    mockedRequestJson.mockResolvedValue({
+      ...withHourly((record) => ({ ...record, precipitation_probability: 0 })),
+      daily: withDaily((record) => ({ ...record, precipitation_probability: 100 }))
+        .daily,
+    });
+
+    const overview = await fetchWeatherOverview({
+      name: 'İstanbul',
+      latitude: 41,
+      longitude: 29,
+    });
+    expect(overview.hourly[0]?.precipitation_probability).toBe(0);
+    expect(overview.daily[0]?.precipitation_probability).toBe(100);
+    expect(overview.daily).toHaveLength(7);
+  });
+
   test.each([
     ['empty hourly forecast', { ...overviewPayload, hourly: [] }],
     [
+      'shorter hourly forecast',
+      { ...overviewPayload, hourly: hourly.slice(0, 23) },
+    ],
+    [
+      'longer hourly forecast',
+      { ...overviewPayload, hourly: [...hourly, { ...hourly[0] }] },
+    ],
+    ['missing daily forecast', { ...overviewPayload, daily: [] }],
+    [
+      'shorter daily forecast',
+      { ...overviewPayload, daily: daily.slice(0, 6) },
+    ],
+    [
       'non-numeric hourly temperature',
-      {
-        ...overviewPayload,
-        hourly: [{ ...overviewPayload.hourly[0], temperature: '24.5' }],
-      },
+      withHourly((record) => ({ ...record, temperature: '24.5' })),
+    ],
+    [
+      'non-numeric hourly probability',
+      withHourly((record) => ({ ...record, precipitation_probability: '35' })),
+    ],
+    [
+      'fractional hourly probability',
+      withHourly((record) => ({ ...record, precipitation_probability: 35.5 })),
+    ],
+    [
+      'out-of-range hourly probability',
+      withHourly((record) => ({ ...record, precipitation_probability: 101 })),
+    ],
+    [
+      'negative hourly probability',
+      withHourly((record) => ({ ...record, precipitation_probability: -1 })),
+    ],
+    [
+      'missing daily date',
+      withDaily((record) => ({ ...record, date: '' })),
+    ],
+    [
+      'non-string daily date',
+      withDaily((record) => ({ ...record, date: 20260830 })),
+    ],
+    [
+      'non-finite daily maximum temperature',
+      withDaily((record) => ({ ...record, temperature_max: '30.5' })),
+    ],
+    [
+      'non-finite daily precipitation',
+      withDaily((record) => ({ ...record, precipitation: null })),
+    ],
+    [
+      'fractional daily probability',
+      withDaily((record) => ({ ...record, precipitation_probability: 35.5 })),
+    ],
+    [
+      'out-of-range daily probability',
+      withDaily((record) => ({ ...record, precipitation_probability: 101 })),
     ],
     [
       'malformed rain event',

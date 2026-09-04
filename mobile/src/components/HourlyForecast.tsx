@@ -25,6 +25,9 @@ export function HourlyForecast({ hourly }: HourlyForecastProps) {
             <Text style={styles.hourlyTemperature}>
               {Math.round(hour.temperature)}°C
             </Text>
+            <Text style={styles.hourlyProbability}>
+              Yağış %{hour.precipitation_probability}
+            </Text>
             <Text style={styles.hourlyPrecipitation}>{hour.precipitation} mm</Text>
           </View>
         ))}
@@ -43,7 +46,7 @@ const styles = StyleSheet.create({
   },
   hourlyScroll: {
     width: '100%',
-    height: 145,
+    height: 160,
     flexGrow: 0,
   },
   hourlyContent: {
@@ -53,7 +56,7 @@ const styles = StyleSheet.create({
   },
   hourlyCard: {
     width: 72,
-    height: 135,
+    height: 150,
     backgroundColor: '#f2f6fa',
     borderRadius: 12,
     borderWidth: 1,
@@ -75,6 +78,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 'bold',
     marginBottom: 4,
+  },
+  hourlyProbability: {
+    fontSize: 10,
+    color: '#2563eb',
+    marginBottom: 2,
   },
   hourlyPrecipitation: {
     fontSize: 10,

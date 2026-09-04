@@ -1,5 +1,6 @@
 import type {
   CurrentWeather,
+  DailyWeather,
   HourlyWeather,
   LocationSearchResult,
   RainEvent,
@@ -11,12 +12,19 @@ import { requestJson } from './client';
 
 type JsonRecord = Record<string, unknown>;
 
+const HOURLY_RECORD_COUNT = 24;
+const DAILY_RECORD_COUNT = 7;
+
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isProbability(value: unknown): value is number {
+  return isFiniteNumber(value) && Number.isInteger(value) && value >= 0 && value <= 100;
 }
 
 function parseCurrentWeather(value: unknown): CurrentWeather {
@@ -41,12 +49,29 @@ function parseHourlyWeather(value: unknown): HourlyWeather {
     typeof value.time !== 'string' ||
     !isFiniteNumber(value.temperature) ||
     !isFiniteNumber(value.precipitation) ||
+    !isProbability(value.precipitation_probability) ||
     !isFiniteNumber(value.weather_code) ||
     !isFiniteNumber(value.wind_speed)
   ) {
     throw new Error('Unexpected hourly weather response');
   }
   return value as HourlyWeather;
+}
+
+function parseDailyWeather(value: unknown): DailyWeather {
+  if (
+    !isRecord(value) ||
+    typeof value.date !== 'string' ||
+    value.date.trim() === '' ||
+    !isFiniteNumber(value.temperature_max) ||
+    !isFiniteNumber(value.temperature_min) ||
+    !isFiniteNumber(value.precipitation) ||
+    !isProbability(value.precipitation_probability) ||
+    !isFiniteNumber(value.weather_code)
+  ) {
+    throw new Error('Unexpected daily weather response');
+  }
+  return value as DailyWeather;
 }
 
 function parseRainEvent(value: unknown): RainEvent {
@@ -95,12 +120,19 @@ export async function fetchWeatherOverview(
   signal?: AbortSignal
 ): Promise<WeatherOverview> {
   const data = await requestJson(`/weather/overview?${locationQuery(location)}`, { signal });
-  if (!isRecord(data) || !Array.isArray(data.hourly) || data.hourly.length === 0) {
+  if (
+    !isRecord(data) ||
+    !Array.isArray(data.hourly) ||
+    data.hourly.length !== HOURLY_RECORD_COUNT ||
+    !Array.isArray(data.daily) ||
+    data.daily.length !== DAILY_RECORD_COUNT
+  ) {
     throw new Error('Unexpected weather overview response');
   }
   return {
     current: parseCurrentWeather(data.current),
     hourly: data.hourly.map(parseHourlyWeather),
+    daily: data.daily.map(parseDailyWeather),
     next_rain: data.next_rain === null ? null : parseRainEvent(data.next_rain),
   };
 }

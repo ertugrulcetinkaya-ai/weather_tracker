@@ -18,8 +18,18 @@ export type HourlyWeather = {
   time: string;
   temperature: number;
   precipitation: number;
+  precipitation_probability: number;
   weather_code: number;
   wind_speed: number;
+};
+
+export type DailyWeather = {
+  date: string;
+  temperature_max: number;
+  temperature_min: number;
+  precipitation: number;
+  precipitation_probability: number;
+  weather_code: number;
 };
 
 export type RainEvent = {
@@ -32,6 +42,7 @@ export type RainEvent = {
 export type WeatherOverview = {
   current: CurrentWeather;
   hourly: HourlyWeather[];
+  daily: DailyWeather[];
   next_rain: RainEvent | null;
 };
 

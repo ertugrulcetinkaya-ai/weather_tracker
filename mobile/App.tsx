@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { Button, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CurrentWeatherCard } from './src/components/CurrentWeatherCard';
+import { DailyForecast } from './src/components/DailyForecast';
 import { NextRainCard } from './src/components/NextRainCard';
 import { HourlyForecast } from './src/components/HourlyForecast';
 import { LocationControls } from './src/components/LocationControls';
@@ -98,6 +99,10 @@ export default function App() {
 
       {overviewStatus === 'ready' && overview !== null && (
         <HourlyForecast hourly={overview.hourly} />
+      )}
+
+      {overviewStatus === 'ready' && overview !== null && (
+        <DailyForecast daily={overview.daily} />
       )}
 
       <Text style={styles.status}>

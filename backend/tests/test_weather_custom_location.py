@@ -46,6 +46,7 @@ def _hourly_payload():
             "time": times,
             "temperature_2m": [20.0] * 24,
             "precipitation": [0.0] * 24,
+            "precipitation_probability": [10] * 24,
             "weather_code": [1] * 24,
             "wind_speed_10m": [5.0] * 24,
         }

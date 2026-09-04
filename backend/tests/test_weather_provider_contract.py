@@ -66,6 +66,7 @@ def _hourly_fields():
     return {
         "temperature_2m": 30.0,
         "precipitation": 0.0,
+        "precipitation_probability": 10,
         "weather_code": 1,
         "wind_speed_10m": 5.0,
     }

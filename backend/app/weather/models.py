@@ -33,8 +33,18 @@ class HourlyWeather(ApiModel):
     time: str
     temperature: float
     precipitation: float
+    precipitation_probability: int
     weather_code: int
     wind_speed: float
+
+
+class DailyWeather(ApiModel):
+    date: str
+    temperature_max: float
+    temperature_min: float
+    precipitation: float
+    precipitation_probability: int
+    weather_code: int
 
 
 class RainEvent(ApiModel):
@@ -47,6 +57,7 @@ class RainEvent(ApiModel):
 class WeatherOverview(ApiModel):
     current: CurrentWeather
     hourly: list[HourlyWeather]
+    daily: list[DailyWeather]
     next_rain: Optional[RainEvent]
 
 

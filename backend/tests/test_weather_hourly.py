@@ -17,7 +17,7 @@ def _make_times():
 
 
 def _hourly_payload(times, **fields):
-    hourly = {"time": times}
+    hourly = {"time": times, "precipitation_probability": [10] * len(times)}
     for key, value in fields.items():
         hourly[key] = value
     return {"hourly": hourly}
@@ -51,6 +51,7 @@ def test_hourly_weather_returns_24_points():
         "time": "2026-08-25T12:00",
         "temperature": 30.0,
         "precipitation": 0.0,
+        "precipitation_probability": 10,
         "weather_code": 1,
         "wind_speed": 5.0,
     }
@@ -58,6 +59,7 @@ def test_hourly_weather_returns_24_points():
         "time": "2026-08-26T11:00",
         "temperature": 30.0,
         "precipitation": 0.0,
+        "precipitation_probability": 10,
         "weather_code": 1,
         "wind_speed": 5.0,
     }
@@ -190,3 +192,66 @@ def test_hourly_weather_unrepresentable_float_field_returns_502(field, values):
 
     assert response.status_code == 502
     assert "non-finite" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "probability",
+    [-1, 101, 35.5, float("nan"), float("inf"), None, True, "35"],
+)
+def test_hourly_weather_rejects_invalid_precipitation_probability(probability):
+    payload = _hourly_payload_with(
+        "precipitation_probability", [10] * 23 + [probability]
+    )
+    with mock.patch(
+        "app.weather.open_meteo.httpx.get", return_value=_mock_response(payload)
+    ):
+        response = client.get("/weather/hourly")
+
+    assert response.status_code == 502
+
+
+def test_hourly_weather_accepts_precipitation_probability_boundaries():
+    payload = _hourly_payload_with(
+        "precipitation_probability", [0, 100] + [50] * 22
+    )
+    with mock.patch(
+        "app.weather.open_meteo.httpx.get", return_value=_mock_response(payload)
+    ):
+        response = client.get("/weather/hourly")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data[0]["precipitation_probability"] == 0
+    assert data[1]["precipitation_probability"] == 100
+
+
+def test_hourly_weather_normalizes_integral_probability_floats():
+    payload = _hourly_payload_with("precipitation_probability", [35.0] * 24)
+    with mock.patch(
+        "app.weather.open_meteo.httpx.get", return_value=_mock_response(payload)
+    ):
+        response = client.get("/weather/hourly")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert {point["precipitation_probability"] for point in data} == {35}
+    assert all(
+        type(point["precipitation_probability"]) is int for point in data
+    )
+
+
+def test_hourly_weather_requires_precipitation_probability_field():
+    payload = _hourly_payload(
+        _make_times(),
+        temperature_2m=[30.0] * 24,
+        precipitation=[0.0] * 24,
+        weather_code=[1] * 24,
+        wind_speed_10m=[5.0] * 24,
+    )
+    payload["hourly"].pop("precipitation_probability")
+    with mock.patch(
+        "app.weather.open_meteo.httpx.get", return_value=_mock_response(payload)
+    ):
+        response = client.get("/weather/hourly")
+
+    assert response.status_code == 502
