@@ -119,3 +119,23 @@ def test_weather_current_does_not_match_same_hour_on_another_day():
     ):
         with pytest.raises(WeatherFetchError, match="current hour"):
             get_current_weather()
+
+
+def test_weather_current_non_integer_humidity_returns_502():
+    times = ["2026-08-24T14:00", TARGET_TIME, "2026-08-24T16:00"]
+    payload = _hourly_payload(
+        times,
+        temperature_2m=[30.0, 28.4, 27.9],
+        relative_humidity_2m=[40, 42.5, 45],
+        apparent_temperature=[31.0, 29.1, 28.8],
+        weather_code=[0, 1, 2],
+        wind_speed_10m=[10.0, 13.2, 15.5],
+    )
+    with patch("app.weather.open_meteo.datetime", _FixedDatetime), patch(
+        "app.weather.open_meteo.httpx.get",
+        return_value=_mock_response(payload),
+    ):
+        response = client.get("/weather/current")
+
+    assert response.status_code == 502
+    assert "non-integer" in response.json()["detail"]

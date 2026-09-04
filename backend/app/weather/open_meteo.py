@@ -121,19 +121,28 @@ def _build_current_weather(
     now = datetime.now(ZoneInfo(ELAZIG_TIMEZONE))
     target_time = now.strftime("%Y-%m-%dT%H:00")
     index = _select_hour_index(times, target_time)
+    time = times[index]
 
     selected = {
-        field: _require_number(hourly[field][index], field=field, time=times[index])
+        field: _require_number(hourly[field][index], field=field, time=time)
         for field in CURRENT_FIELDS
     }
+    humidity = selected["relative_humidity_2m"]
+    if isinstance(humidity, float):
+        if not humidity.is_integer():
+            raise WeatherFetchError(
+                f"Open-Meteo response has non-integer hourly value for relative_humidity_2m at {time}"
+            )
+        humidity = int(humidity)
+
     return CurrentWeather(
         location=location,
         temperature=selected["temperature_2m"],
         apparent_temperature=selected["apparent_temperature"],
-        humidity=selected["relative_humidity_2m"],
+        humidity=humidity,
         wind_speed=selected["wind_speed_10m"],
         weather_code=selected["weather_code"],
-        time=times[index],
+        time=time,
     )
 
 
