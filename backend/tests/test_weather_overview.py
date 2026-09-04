@@ -2,6 +2,7 @@ from datetime import datetime
 from unittest import mock
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -120,3 +121,45 @@ def test_current_maps_invalid_provider_json_to_bad_gateway():
 
     assert response.status_code == 502
     assert "not valid JSON" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("field", "values"),
+    [
+        ("relative_humidity_2m", [42, 45, 101]),
+        ("weather_code", [1, 61.5, 2]),
+        ("precipitation", [0.0, float("nan"), 0.0]),
+        ("wind_speed_10m", [13.2, 15.5, -1.0]),
+        ("temperature_2m", [28.4, 27.9, float("inf")]),
+    ],
+)
+def test_overview_rejects_malformed_provider_values_on_shared_path(field, values):
+    payload = _overview_payload()
+    payload["hourly"][field] = values
+    with mock.patch("app.weather.open_meteo.datetime", _FixedDatetime), mock.patch(
+        "app.weather.open_meteo.httpx.get",
+        return_value=_mock_response(payload),
+    ) as mocked_get:
+        response = client.get("/weather/overview")
+
+    assert response.status_code == 502
+    assert mocked_get.call_count == 1
+
+
+def test_overview_serializes_integral_provider_floats_as_integers():
+    payload = _overview_payload()
+    payload["hourly"]["relative_humidity_2m"] = [48.0, 45, 48]
+    payload["hourly"]["weather_code"] = [3.0, 61, 2]
+    with mock.patch("app.weather.open_meteo.datetime", _FixedDatetime), mock.patch(
+        "app.weather.open_meteo.httpx.get",
+        return_value=_mock_response(payload),
+    ):
+        response = client.get("/weather/overview")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["current"]["humidity"] == 48
+    assert type(data["current"]["humidity"]) is int
+    assert data["current"]["weather_code"] == 3
+    assert type(data["current"]["weather_code"]) is int
+    assert [point["weather_code"] for point in data["hourly"]] == [3, 61, 2]
