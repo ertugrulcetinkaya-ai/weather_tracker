@@ -480,11 +480,10 @@ Qwen'a arbitrary shell verilmek zorunda değildir.
 
 # 15. NETWORK / LOCAL QWEN ENDPOINT
 
-Local Qwen endpoint:
+Local Qwen endpoint is supplied by the developer's local worker configuration
+and must not be stored in the repository.
 
-`100.72.149.102:11234`
-
-Repository source içeriği yalnız bu onaylı yerel Qwen endpoint'ine ve task için gerekli scope kadar gönderilebilir.
+Repository source içeriği yalnız bu onaylı yerel worker endpoint'ine ve task için gerekli scope kadar gönderilebilir.
 
 Gönderilmemesi gerekenler:
 
