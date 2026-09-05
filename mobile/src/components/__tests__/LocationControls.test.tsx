@@ -72,11 +72,13 @@ async function renderControls(overrides: RenderOptions = {}) {
     searchResults: [] as LocationSearchResult[],
     persistenceError: false,
     isFavorite: false,
+    deviceLocationStatus: 'idle' as const,
     isSelected: (_location: WeatherLocation) => false,
     onLocationSelect: jest.fn(),
     onSearchResultSelect: jest.fn(),
     onSearchQueryChange: jest.fn(),
     onFavoriteToggle: jest.fn(),
+    onCurrentLocation: jest.fn(),
     ...overrides,
   };
 
@@ -306,5 +308,67 @@ describe('LocationControls persistence error', () => {
         name: 'Konum tercihleri bu cihazda kaydedilemedi.',
       }),
     ).toBeOnTheScreen();
+  });
+});
+
+describe('LocationControls current location button', () => {
+  it('offers the current-location action and reports the tap once', async () => {
+    const { getByLabelText, getByText, props } = await renderControls();
+
+    expect(getByLabelText('Mevcut konumumu kullan')).toBeOnTheScreen();
+
+    await fireEvent.press(getByText('📍 Mevcut konumum'));
+    expect(props.onCurrentLocation).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks the button and swaps the label while a fix is in flight', async () => {
+    const { getByRole, getByText, queryByRole, queryByText, props } = await renderControls({
+      deviceLocationStatus: 'loading',
+    });
+
+    const button = getByRole('button', {
+      name: 'Mevcut konumumu kullan',
+      disabled: true,
+    });
+    expect(button).toBeOnTheScreen();
+    expect(button.props.accessibilityState).toMatchObject({ disabled: true });
+    expect(
+      queryByRole('button', { name: 'Mevcut konumumu kullan', disabled: false })
+    ).toBeNull();
+
+    expect(getByText('Konum alınıyor...')).toBeOnTheScreen();
+    expect(queryByText('📍 Mevcut konumum')).toBeNull();
+
+    await fireEvent.press(getByText('Konum alınıyor...'));
+    expect(props.onCurrentLocation).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['permission-denied', 'Konum izni verilmedi.'],
+    ['services-disabled', 'Konum servisleri kapalı.'],
+    ['error', 'Konum alınamadı. Tekrar deneyin.'],
+  ] as const)('shows the %s failure as an inline alert', async (status, message) => {
+    const { getByRole, queryByRole } = await renderControls({ deviceLocationStatus: status });
+
+    expect(getByRole('alert', { name: message })).toBeOnTheScreen();
+
+    const otherMessages = [
+      'Konum izni verilmedi.',
+      'Konum servisleri kapalı.',
+      'Konum alınamadı. Tekrar deneyin.',
+    ].filter((candidate) => candidate !== message);
+    for (const other of otherMessages) {
+      expect(queryByRole('alert', { name: other })).toBeNull();
+    }
+  });
+
+  it('keeps quiet about device location while idle or loading', async () => {
+    for (const status of ['idle', 'loading'] as const) {
+      const { queryByRole } = await renderControls({ deviceLocationStatus: status });
+
+      expect(queryByRole('alert', { name: 'Konum izni verilmedi.' })).toBeNull();
+      expect(queryByRole('alert', { name: 'Konum servisleri kapalı.' })).toBeNull();
+      expect(queryByRole('alert', { name: 'Konum alınamadı. Tekrar deneyin.' })).toBeNull();
+    }
   });
 });

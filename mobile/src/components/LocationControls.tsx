@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import type { DeviceLocationStatus } from '../hooks/useDeviceLocation';
 import type { LocationSearchResult, WeatherLocation } from '../types/weather';
 
 type LocationControlsProps = {
@@ -10,11 +11,13 @@ type LocationControlsProps = {
   searchResults: LocationSearchResult[];
   persistenceError: boolean;
   isFavorite: boolean;
+  deviceLocationStatus: DeviceLocationStatus;
   isSelected: (location: WeatherLocation) => boolean;
   onLocationSelect: (location: WeatherLocation) => void;
   onSearchResultSelect: (result: LocationSearchResult) => void;
   onSearchQueryChange: (text: string) => void;
   onFavoriteToggle: () => void;
+  onCurrentLocation: () => void;
 };
 
 export function LocationControls({
@@ -25,12 +28,16 @@ export function LocationControls({
   searchResults,
   persistenceError,
   isFavorite,
+  deviceLocationStatus,
   isSelected,
   onLocationSelect,
   onSearchResultSelect,
   onSearchQueryChange,
   onFavoriteToggle,
+  onCurrentLocation,
 }: LocationControlsProps) {
+  const isDeviceLocationLoading = deviceLocationStatus === 'loading';
+
   return (
     <>
       <View style={styles.cityRow}>
@@ -53,6 +60,37 @@ export function LocationControls({
           </Pressable>
         ))}
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Mevcut konumumu kullan"
+        accessibilityState={{ disabled: isDeviceLocationLoading }}
+        disabled={isDeviceLocationLoading}
+        style={[
+          styles.deviceLocationButton,
+          isDeviceLocationLoading && styles.deviceLocationButtonLoading,
+        ]}
+        onPress={onCurrentLocation}
+      >
+        <Text style={styles.deviceLocationText}>
+          {isDeviceLocationLoading ? 'Konum alınıyor...' : '📍 Mevcut konumum'}
+        </Text>
+      </Pressable>
+      {deviceLocationStatus === 'permission-denied' && (
+        <Text accessibilityRole="alert" style={styles.deviceLocationError}>
+          Konum izni verilmedi.
+        </Text>
+      )}
+      {deviceLocationStatus === 'services-disabled' && (
+        <Text accessibilityRole="alert" style={styles.deviceLocationError}>
+          Konum servisleri kapalı.
+        </Text>
+      )}
+      {deviceLocationStatus === 'error' && (
+        <Text accessibilityRole="alert" style={styles.deviceLocationError}>
+          Konum alınamadı. Tekrar deneyin.
+        </Text>
+      )}
 
       <View style={styles.searchBox}>
         <TextInput
@@ -264,6 +302,28 @@ const styles = StyleSheet.create({
   },
   persistenceError: {
     marginTop: 8,
+    fontSize: 12,
+    color: '#b91c1c',
+  },
+  deviceLocationButton: {
+    alignSelf: 'center',
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#eef2ff',
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+  },
+  deviceLocationButtonLoading: {
+    opacity: 0.6,
+  },
+  deviceLocationText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#3730a3',
+  },
+  deviceLocationError: {
     fontSize: 12,
     color: '#b91c1c',
   },

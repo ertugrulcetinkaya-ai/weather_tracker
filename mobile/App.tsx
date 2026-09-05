@@ -7,6 +7,7 @@ import { NextRainCard } from './src/components/NextRainCard';
 import { HourlyForecast } from './src/components/HourlyForecast';
 import { LocationControls } from './src/components/LocationControls';
 
+import { useDeviceLocation } from './src/hooks/useDeviceLocation';
 import { useLocationPreferences } from './src/hooks/useLocationPreferences';
 import { useLocationSearch } from './src/hooks/useLocationSearch';
 import { useWeatherOverview } from './src/hooks/useWeatherOverview';
@@ -29,12 +30,14 @@ export default function App() {
     toggleFavorite,
   } = useLocationPreferences(WEATHER_LOCATIONS[0]);
   const search = useLocationSearch();
+  const deviceLocation = useDeviceLocation();
   const { overview, refresh, status: overviewStatus } = useWeatherOverview(
     selectedLocation,
     hydrated
   );
 
   const handleCitySelect = (loc: WeatherLocation) => {
+    deviceLocation.cancelPendingRequest();
     if (isSameLocation(loc, selectedLocation)) return;
     selectLocation(loc);
   };
@@ -55,6 +58,13 @@ export default function App() {
     toggleFavorite(selectedLocation);
   };
 
+  const handleCurrentLocation = () => {
+    deviceLocation.requestCurrentLocation((location) => {
+      selectLocation(location);
+      search.reset();
+    });
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -72,11 +82,13 @@ export default function App() {
         searchResults={search.results}
         persistenceError={persistenceError}
         isFavorite={isFavorite}
+        deviceLocationStatus={deviceLocation.status}
         isSelected={(location) => isSameLocation(location, selectedLocation)}
         onLocationSelect={handleCitySelect}
         onSearchResultSelect={handleSearchSelect}
         onSearchQueryChange={search.setQuery}
         onFavoriteToggle={handleFavoriteToggle}
+        onCurrentLocation={handleCurrentLocation}
       />
 
       {(!hydrated || overviewStatus === 'idle' || overviewStatus === 'loading') && (
