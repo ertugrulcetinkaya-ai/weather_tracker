@@ -17,7 +17,7 @@ const DAILY: DailyWeather[] = [
     date: '2026-08-31',
     temperature_max: 29.6,
     temperature_min: 19.4,
-    precipitation: 2.4,
+    precipitation: 1.234,
     precipitation_probability: 65,
     weather_code: 61,
   },
@@ -130,7 +130,7 @@ describe('DailyForecast', () => {
   it('shows precipitation amounts only for days with measurable rain', async () => {
     const { getByText, queryByText } = await render(<DailyForecast daily={DAILY} />);
 
-    expect(getByText('2.4 mm')).toBeTruthy();
+    expect(getByText('1.23 mm')).toBeTruthy();
     expect(getByText('0.1 mm')).toBeTruthy();
     expect(getByText('8.05 mm')).toBeTruthy();
 

@@ -17,7 +17,7 @@ describe('HourlyForecast', () => {
     {
       time: '2024-06-01T14:00',
       temperature: 19.6,
-      precipitation: 1.2,
+      precipitation: 1.234,
       precipitation_probability: 35,
       weather_code: 61,
       wind_speed: 8.7,
@@ -40,7 +40,7 @@ describe('HourlyForecast', () => {
 
     // Precipitation.
     expect(getByText('0 mm')).toBeTruthy();
-    expect(getByText('1.2 mm')).toBeTruthy();
+    expect(getByText('1.23 mm')).toBeTruthy();
 
     // Precipitation probability straight from the provider.
     expect(getByText('Yağış %0')).toBeTruthy();

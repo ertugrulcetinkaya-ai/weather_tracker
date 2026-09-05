@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { RainEvent } from '../types/weather';
+import { formatPrecipitation } from '../weather/format';
 
 function formatHour(time: string): string {
   const parts = time.split('T');
@@ -24,7 +25,7 @@ export function NextRainCard({ nextRain }: { nextRain: RainEvent | null }) {
               {formatHour(nextRain.end_time)}
             </Text>
             <Text style={styles.rainDetail}>
-              Toplam {Number(nextRain.total_precipitation.toFixed(2))} mm
+              Toplam {formatPrecipitation(nextRain.total_precipitation)} mm
             </Text>
             <Text style={styles.rainDetail}>
               En yoğun: {formatHour(nextRain.peak_time)}

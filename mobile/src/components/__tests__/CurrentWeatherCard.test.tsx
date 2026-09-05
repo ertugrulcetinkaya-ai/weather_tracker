@@ -49,6 +49,14 @@ describe('CurrentWeatherCard', () => {
     expect(getByText('14.2 km/s')).toBeTruthy();
   });
 
+  it('rounds wind speed to one decimal and removes trailing zeroes', async () => {
+    const { getByText } = await render(
+      <CurrentWeatherCard current={{ ...current, wind_speed: 7.26 }} />,
+    );
+
+    expect(getByText('7.3 km/s')).toBeTruthy();
+  });
+
   it('shows the condition label and emoji for the weather code', async () => {
     const { getByText } = await render(<CurrentWeatherCard current={current} />);
 

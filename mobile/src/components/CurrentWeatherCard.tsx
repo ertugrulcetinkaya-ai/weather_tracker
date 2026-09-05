@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { CurrentWeather } from '../types/weather';
 import { formatWeatherTime, getWeatherCondition } from '../weather/condition';
+import { formatWindSpeed } from '../weather/format';
 
 type CurrentWeatherCardProps = {
   current: CurrentWeather;
@@ -30,7 +31,9 @@ export function CurrentWeatherCard({ current }: CurrentWeatherCardProps) {
         </View>
         <View style={styles.metric}>
           <Text style={styles.metricLabel}>Rüzgâr</Text>
-          <Text style={styles.metricValue}>{current.wind_speed} km/s</Text>
+          <Text style={styles.metricValue}>
+            {formatWindSpeed(current.wind_speed)} km/s
+          </Text>
         </View>
       </View>
     </View>

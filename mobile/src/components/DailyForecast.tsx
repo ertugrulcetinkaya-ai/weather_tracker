@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { DailyWeather } from '../types/weather';
 import { getWeatherCondition } from '../weather/condition';
+import { formatPrecipitation } from '../weather/format';
 
 const DAILY_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const WEEKDAY_LABELS = [
@@ -71,7 +72,7 @@ export function DailyForecast({ daily }: DailyForecastProps) {
                 </Text>
                 {day.precipitation > 0 ? (
                   <Text style={styles.dailyPrecipitation}>
-                    {day.precipitation} mm
+                    {formatPrecipitation(day.precipitation)} mm
                   </Text>
                 ) : null}
               </View>

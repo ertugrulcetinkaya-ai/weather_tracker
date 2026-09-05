@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { HourlyWeather } from '../types/weather';
 import { getWeatherCondition } from '../weather/condition';
+import { formatPrecipitation } from '../weather/format';
 
 type HourlyForecastProps = {
   hourly: HourlyWeather[];
@@ -28,7 +29,9 @@ export function HourlyForecast({ hourly }: HourlyForecastProps) {
             <Text style={styles.hourlyProbability}>
               Yağış %{hour.precipitation_probability}
             </Text>
-            <Text style={styles.hourlyPrecipitation}>{hour.precipitation} mm</Text>
+            <Text style={styles.hourlyPrecipitation}>
+              {formatPrecipitation(hour.precipitation)} mm
+            </Text>
           </View>
         ))}
       </ScrollView>
