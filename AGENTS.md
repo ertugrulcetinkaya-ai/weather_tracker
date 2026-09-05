@@ -6,6 +6,13 @@ Repository:
 Worker root:
 `~/Tools/qwen-codex-worker`
 
+V3 implementation worker executable:
+`~/Tools/qwen-codex-worker/qwen-agent`
+
+`qwen-patch` is legacy patch-artifact mode only. V3 work uses Qwen JSON
+filesystem actions inside the disposable sandbox; the sandbox filesystem state
+is the artifact and Git creates the final diff.
+
 ## 1. ANA AMAÇ
 
 Birincil optimizasyon hedefi:
