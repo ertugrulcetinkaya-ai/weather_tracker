@@ -20,7 +20,7 @@ def _hourly_payload(times, **fields):
     hourly = {"time": times, "precipitation_probability": [10] * len(times)}
     for key, value in fields.items():
         hourly[key] = value
-    return {"hourly": hourly}
+    return {"timezone": "Europe/Istanbul", "hourly": hourly}
 
 
 def _mock_response(payload):
@@ -85,6 +85,7 @@ def test_hourly_weather_missing_value():
 
 def test_fetch_hourly_weather_missing_hourly_time():
     payload = {
+        "timezone": "Europe/Istanbul",
         "hourly": {
             "temperature_2m": [30.0] * 24,
             "precipitation": [0.0] * 24,

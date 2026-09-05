@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,14 +13,16 @@ from app.weather.open_meteo import (
 
 client = TestClient(app)
 
-FIXED_NOW = datetime(2026, 8, 24, 15, 41, tzinfo=None)
+FIXED_UTC = datetime(2026, 8, 24, 12, 41, tzinfo=timezone.utc)
 TARGET_TIME = "2026-08-24T15:00"
 
 
 class _FixedDatetime(datetime):
     @classmethod
     def now(cls, tz=None):
-        return FIXED_NOW.replace(tzinfo=tz)
+        if tz is None:
+            return FIXED_UTC.replace(tzinfo=None)
+        return FIXED_UTC.astimezone(tz)
 
 
 def _mock_response(payload, status_code=200):
@@ -30,8 +32,8 @@ def _mock_response(payload, status_code=200):
     return mock_response
 
 
-def _hourly_payload(times, **fields):
-    return {"hourly": {"time": times, **fields}}
+def _hourly_payload(times, *, timezone_name="Europe/Istanbul", **fields):
+    return {"timezone": timezone_name, "hourly": {"time": times, **fields}}
 
 
 def test_weather_current_success():
@@ -67,10 +69,60 @@ def test_weather_current_success():
         "latitude": 38.6743,
         "longitude": 39.2232,
         "hourly": "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
-        "timezone": "Europe/Istanbul",
+        "timezone": "auto",
         "forecast_days": 7,
         "forecast_hours": 24,
     }
+
+
+def test_weather_current_uses_new_york_provider_timezone():
+    times = ["2026-08-24T07:00", "2026-08-24T08:00", "2026-08-24T09:00"]
+    payload = _hourly_payload(
+        times,
+        timezone_name="America/New_York",
+        temperature_2m=[17.0, 21.5, 23.0],
+        relative_humidity_2m=[50, 55, 60],
+        apparent_temperature=[17.5, 22.0, 23.5],
+        weather_code=[1, 2, 3],
+        wind_speed_10m=[8.0, 9.0, 10.0],
+    )
+    with patch("app.weather.open_meteo.datetime", _FixedDatetime), patch(
+        "app.weather.open_meteo.httpx.get",
+        return_value=_mock_response(payload),
+    ):
+        response = client.get(
+            "/weather/current",
+            params={"latitude": 40.7128, "longitude": -74.0060, "location": "New York"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["time"] == "2026-08-24T08:00"
+    assert response.json()["temperature"] == 21.5
+
+
+def test_weather_current_uses_positive_offset_provider_timezone():
+    times = ["2026-08-24T20:00", "2026-08-24T21:00", "2026-08-24T22:00"]
+    payload = _hourly_payload(
+        times,
+        timezone_name="Asia/Tokyo",
+        temperature_2m=[17.0, 21.5, 23.0],
+        relative_humidity_2m=[50, 55, 60],
+        apparent_temperature=[17.5, 22.0, 23.5],
+        weather_code=[1, 2, 3],
+        wind_speed_10m=[8.0, 9.0, 10.0],
+    )
+    with patch("app.weather.open_meteo.datetime", _FixedDatetime), patch(
+        "app.weather.open_meteo.httpx.get",
+        return_value=_mock_response(payload),
+    ):
+        response = client.get(
+            "/weather/current",
+            params={"latitude": 35.6762, "longitude": 139.6503, "location": "Tokyo"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["time"] == "2026-08-24T21:00"
+    assert response.json()["temperature"] == 21.5
 
 
 def test_weather_current_missing_hourly_field_raises():

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Optional
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,14 +20,14 @@ from app.weather.open_meteo import (
     ELAZIG_LATITUDE,
     ELAZIG_LOCATION,
     ELAZIG_LONGITUDE,
-    ELAZIG_TIMEZONE,
     WeatherFetchError,
     fetch_hourly_weather,
     get_current_weather,
+    get_next_rain,
     get_weather_overview,
     search_locations,
 )
-from app.weather.rain import find_next_rain_event, find_rain_events
+from app.weather.rain import find_rain_events
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -133,10 +131,7 @@ def weather_rain_next(
     longitude: Optional[float] = Query(None, ge=-180, le=180),
 ) -> Optional[RainEvent]:
     lat, lon = _validate_coords(latitude, longitude)
-    hourly = fetch_hourly_weather(latitude=lat, longitude=lon)
-    events = find_rain_events(hourly)
-    now = datetime.now(ZoneInfo(ELAZIG_TIMEZONE)).strftime("%Y-%m-%dT%H:%M")
-    return find_next_rain_event(events, now)
+    return get_next_rain(latitude=lat, longitude=lon)
 
 
 def create_app(settings: Optional[Settings] = None) -> FastAPI:

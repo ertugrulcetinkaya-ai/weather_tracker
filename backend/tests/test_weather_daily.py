@@ -1,6 +1,6 @@
 """Generic Forecast API daily contract for `/weather/overview`."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest import mock
 
 import pytest
@@ -11,7 +11,7 @@ from app.weather.open_meteo import WeatherFetchError, get_weather_overview
 
 client = TestClient(app)
 
-FIXED_NOW = datetime(2026, 8, 24, 15, 30)
+FIXED_UTC = datetime(2026, 8, 24, 12, 30, tzinfo=timezone.utc)
 CURRENT_TARGET_TIME = "2026-08-24T15:00"
 
 HOURLY_TIMES = [f"2026-08-24T{hour:02d}:00" for hour in range(15, 24)] + [
@@ -31,7 +31,9 @@ DAILY_DATES = [
 class _FixedDatetime(datetime):
     @classmethod
     def now(cls, tz=None):
-        return FIXED_NOW.replace(tzinfo=tz)
+        if tz is None:
+            return FIXED_UTC.replace(tzinfo=None)
+        return FIXED_UTC.astimezone(tz)
 
 
 def _mock_response(payload):
@@ -66,7 +68,7 @@ def _overview_payload(daily=None, **hourly_overrides):
         "precipitation_probability": [10, 35, 60] + [10] * 21,
     }
     hourly.update(hourly_overrides)
-    payload = {"hourly": hourly}
+    payload = {"timezone": "Europe/Istanbul", "hourly": hourly}
     if daily is not None:
         payload["daily"] = daily
     return payload

@@ -1,6 +1,6 @@
 """Open-Meteo provider-contract coverage for the shared hourly time boundary."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest import mock
 
 import pytest
@@ -10,7 +10,7 @@ from app.main import app
 
 client = TestClient(app)
 
-FIXED_NOW = datetime(2026, 8, 24, 15, 30)
+FIXED_UTC = datetime(2026, 8, 24, 12, 30, tzinfo=timezone.utc)
 CURRENT_TARGET_TIME = "2026-08-24T15:00"
 
 MALFORMED_TIMES = [
@@ -46,7 +46,9 @@ MALFORMED_TIMES_WITH_TARGET = [
 class _FixedDatetime(datetime):
     @classmethod
     def now(cls, tz=None):
-        return FIXED_NOW.replace(tzinfo=tz)
+        if tz is None:
+            return FIXED_UTC.replace(tzinfo=None)
+        return FIXED_UTC.astimezone(tz)
 
 
 def _mock_response(payload):
@@ -56,10 +58,10 @@ def _mock_response(payload):
     return response
 
 
-def _payload(times, fields):
+def _payload(times, fields, *, timezone_value="Europe/Istanbul"):
     hourly = {"time": times}
     hourly.update({name: [value] * len(times) for name, value in fields.items()})
-    return {"hourly": hourly}
+    return {"timezone": timezone_value, "hourly": hourly}
 
 
 def _hourly_fields():
@@ -131,3 +133,30 @@ def test_current_accepts_target_hour_in_minute_granularity_series():
 
     assert response.status_code == 200
     assert response.json()["time"] == CURRENT_TARGET_TIME
+
+
+def test_provider_timezone_is_required():
+    payload = _payload([CURRENT_TARGET_TIME], _current_fields())
+    payload.pop("timezone")
+    with mock.patch("app.weather.open_meteo.httpx.get", return_value=_mock_response(payload)):
+        response = client.get("/weather/current")
+
+    assert response.status_code == 502
+    assert "timezone" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "timezone_value",
+    ["", "   ", "Not/A_Timezone", None, 123, True, [], {}],
+)
+def test_provider_timezone_must_be_a_valid_non_empty_string(timezone_value):
+    payload = _payload(
+        [CURRENT_TARGET_TIME],
+        _current_fields(),
+        timezone_value=timezone_value,
+    )
+    with mock.patch("app.weather.open_meteo.httpx.get", return_value=_mock_response(payload)):
+        response = client.get("/weather/current")
+
+    assert response.status_code == 502
+    assert "timezone" in response.json()["detail"]

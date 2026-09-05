@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
@@ -14,6 +14,7 @@ from app.weather.models import (
     DailyWeather,
     HourlyWeather,
     LocationSearchResult,
+    RainEvent,
     WeatherOverview,
 )
 from app.weather.rain import find_next_rain_event, find_rain_events
@@ -23,7 +24,6 @@ OPEN_METEO_GEOCODING_BASE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 ELAZIG_LATITUDE = 38.6743
 ELAZIG_LONGITUDE = 39.2232
 ELAZIG_LOCATION = "Elazığ"
-ELAZIG_TIMEZONE = "Europe/Istanbul"
 
 # Open-Meteo returns local wall-clock timestamps at minute precision.
 HOURLY_TIME_FORMAT = "%Y-%m-%dT%H:%M"
@@ -299,6 +299,7 @@ def _validate_daily_series(
 class ForecastPayload:
     """Validated provider series of one Generic Forecast request."""
 
+    timezone: ZoneInfo
     times: list[str]
     hourly: dict[str, list[Any]]
     dates: list[str]
@@ -309,6 +310,17 @@ class ForecastPayload:
         if self.daily is None or not self.dates:
             raise WeatherFetchError("Open-Meteo response is missing 'daily'")
         return self.daily
+
+
+def _validate_provider_timezone(value: Any) -> ZoneInfo:
+    if not isinstance(value, str) or not value.strip():
+        raise WeatherFetchError("Open-Meteo response has an invalid 'timezone'")
+    try:
+        return ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise WeatherFetchError(
+            f"Open-Meteo response has an invalid 'timezone': {value}"
+        ) from exc
 
 
 def _request_json(
@@ -345,7 +357,7 @@ def _fetch_forecast_payload(
         "latitude": latitude,
         "longitude": longitude,
         "hourly": ",".join(hourly_fields),
-        "timezone": ELAZIG_TIMEZONE,
+        "timezone": "auto",
         "forecast_days": FORECAST_DAYS,
         "forecast_hours": FORECAST_HOURS,
     }
@@ -361,6 +373,7 @@ def _fetch_forecast_payload(
     if not isinstance(hourly, dict):
         raise WeatherFetchError("Open-Meteo response is missing 'hourly'")
 
+    location_timezone = _validate_provider_timezone(payload.get("timezone"))
     times = _validate_hourly_times(hourly.get("time"))
 
     validated: dict[str, list[Any]] = {}
@@ -376,10 +389,22 @@ def _fetch_forecast_payload(
         ]
 
     if daily_fields is None:
-        return ForecastPayload(times=times, hourly=validated, dates=[], daily=None)
+        return ForecastPayload(
+            timezone=location_timezone,
+            times=times,
+            hourly=validated,
+            dates=[],
+            daily=None,
+        )
 
     dates, daily = _validate_daily_series(payload, daily_fields)
-    return ForecastPayload(times=times, hourly=validated, dates=dates, daily=daily)
+    return ForecastPayload(
+        timezone=location_timezone,
+        times=times,
+        hourly=validated,
+        dates=dates,
+        daily=daily,
+    )
 
 
 def _build_current_weather(
@@ -387,8 +412,9 @@ def _build_current_weather(
     hourly: dict[str, list[Any]],
     *,
     location: str,
+    timezone: ZoneInfo,
 ) -> CurrentWeather:
-    now = datetime.now(ZoneInfo(ELAZIG_TIMEZONE))
+    now = datetime.now(timezone)
     target_time = now.strftime("%Y-%m-%dT%H:00")
     index = _select_hour_index(times, target_time)
     time = times[index]
@@ -482,7 +508,12 @@ def get_current_weather(
         latitude=latitude,
         longitude=longitude,
     )
-    return _build_current_weather(payload.times, payload.hourly, location=location)
+    return _build_current_weather(
+        payload.times,
+        payload.hourly,
+        location=location,
+        timezone=payload.timezone,
+    )
 
 
 def fetch_hourly_weather(
@@ -510,19 +541,39 @@ def get_weather_overview(
         longitude=longitude,
         daily_fields=DAILY_FIELDS,
     )
-    start_time = datetime.now(ZoneInfo(ELAZIG_TIMEZONE)).strftime("%Y-%m-%dT%H:00")
+    start_time = datetime.now(payload.timezone).strftime("%Y-%m-%dT%H:00")
     times, hourly_payload = _select_hourly_window(payload, start_time=start_time)
-    current = _build_current_weather(times, hourly_payload, location=location)
+    current = _build_current_weather(
+        times,
+        hourly_payload,
+        location=location,
+        timezone=payload.timezone,
+    )
     hourly = _build_hourly_weather(times, hourly_payload)
     daily = _build_daily_forecast(payload.dates, payload.require_daily())
     events = find_rain_events(hourly)
-    now = datetime.now(ZoneInfo(ELAZIG_TIMEZONE)).strftime("%Y-%m-%dT%H:%M")
+    now = datetime.now(payload.timezone).strftime("%Y-%m-%dT%H:%M")
     return WeatherOverview(
         current=current,
         hourly=hourly,
         daily=daily,
         next_rain=find_next_rain_event(events, now),
     )
+
+
+def get_next_rain(
+    latitude: float = ELAZIG_LATITUDE,
+    longitude: float = ELAZIG_LONGITUDE,
+) -> RainEvent | None:
+    payload = _fetch_forecast_payload(
+        HOURLY_FIELDS,
+        latitude=latitude,
+        longitude=longitude,
+    )
+    hourly = _build_hourly_weather(payload.times, payload.hourly)
+    events = find_rain_events(hourly)
+    now = datetime.now(payload.timezone).strftime("%Y-%m-%dT%H:%M")
+    return find_next_rain_event(events, now)
 
 
 def search_locations(query: str) -> list[LocationSearchResult]:

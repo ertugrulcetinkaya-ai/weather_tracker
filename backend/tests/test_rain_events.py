@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -7,6 +8,16 @@ from app.weather.models import HourlyWeather, RainEvent
 from app.weather.rain import find_next_rain_event, find_rain_events
 
 client = TestClient(app)
+
+FIXED_UTC = datetime(2026, 8, 26, 11, 30, tzinfo=timezone.utc)
+
+
+class _FixedDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        if tz is None:
+            return FIXED_UTC.replace(tzinfo=None)
+        return FIXED_UTC.astimezone(tz)
 
 
 def _hour(time: str, precipitation: float) -> HourlyWeather:
@@ -122,6 +133,7 @@ def test_all_rainy():
 
 def _hourly_payload(times, precipitations):
     return {
+        "timezone": "Europe/Istanbul",
         "hourly": {
             "time": times,
             "temperature_2m": [25.0] * len(times),
@@ -252,12 +264,7 @@ def test_rain_next_endpoint_with_rain():
     payload = _hourly_payload(times, precipitations)
     with mock.patch(
         "app.weather.open_meteo.httpx.get", return_value=_mock_response(payload)
-    ), mock.patch(
-        "app.main.datetime"
-    ) as mock_dt:
-        from datetime import datetime as real_dt
-        from zoneinfo import ZoneInfo
-        mock_dt.now.return_value = real_dt(2026, 8, 26, 14, 30, tzinfo=ZoneInfo("Europe/Istanbul"))
+    ), mock.patch("app.weather.open_meteo.datetime", _FixedDatetime):
         response = client.get("/weather/rain/next")
 
     assert response.status_code == 200

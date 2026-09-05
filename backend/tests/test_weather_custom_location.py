@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -12,13 +12,15 @@ from app.weather.open_meteo import (
 
 client = TestClient(app)
 
-FIXED_NOW = datetime(2026, 8, 24, 15, 41, tzinfo=None)
+FIXED_UTC = datetime(2026, 8, 24, 12, 41, tzinfo=timezone.utc)
 
 
 class _FixedDatetime(datetime):
     @classmethod
     def now(cls, tz=None):
-        return FIXED_NOW.replace(tzinfo=tz)
+        if tz is None:
+            return FIXED_UTC.replace(tzinfo=None)
+        return FIXED_UTC.astimezone(tz)
 
 ISTANBUL_LAT = 41.0082
 ISTANBUL_LON = 28.9784
@@ -28,6 +30,7 @@ ISTANBUL_NAME = "İstanbul"
 def _current_payload():
     times = ["2026-08-24T14:00", "2026-08-24T15:00", "2026-08-24T16:00"]
     return {
+        "timezone": "Europe/Istanbul",
         "hourly": {
             "time": times,
             "temperature_2m": [25.0, 27.9, 28.1],
@@ -42,6 +45,7 @@ def _current_payload():
 def _hourly_payload():
     times = [f"2026-08-25T{h:02d}:00" for h in range(24)]
     return {
+        "timezone": "Europe/Istanbul",
         "hourly": {
             "time": times,
             "temperature_2m": [20.0] * 24,

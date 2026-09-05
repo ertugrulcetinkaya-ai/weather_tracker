@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest import mock
 
 import httpx
@@ -13,7 +13,7 @@ from app.weather.open_meteo import (
 )
 
 client = TestClient(app)
-FIXED_NOW = datetime(2026, 8, 24, 15, 30)
+FIXED_UTC = datetime(2026, 8, 24, 12, 30, tzinfo=timezone.utc)
 
 HOURLY_TIMES = [
     "2026-08-24T15:00",
@@ -55,13 +55,16 @@ DAILY_DATES = [
 class _FixedDatetime(datetime):
     @classmethod
     def now(cls, tz=None):
-        return FIXED_NOW.replace(tzinfo=tz)
+        if tz is None:
+            return FIXED_UTC.replace(tzinfo=None)
+        return FIXED_UTC.astimezone(tz)
 
 
-def _overview_payload():
+def _overview_payload(*, timezone_name="Europe/Istanbul", times=HOURLY_TIMES):
     return {
+        "timezone": timezone_name,
         "hourly": {
-            "time": list(HOURLY_TIMES),
+            "time": list(times),
             "temperature_2m": [28.4] * 24,
             "relative_humidity_2m": [42] * 24,
             "apparent_temperature": [29.1] * 24,
@@ -107,7 +110,7 @@ def test_overview_builds_screen_with_one_upstream_request():
         "longitude": 28.9784,
         "hourly": ",".join(OVERVIEW_FIELDS),
         "daily": ",".join(DAILY_FIELDS),
-        "timezone": "Europe/Istanbul",
+        "timezone": "auto",
         "forecast_days": 7,
         "forecast_hours": 24,
     }
@@ -163,6 +166,33 @@ def test_overview_builds_screen_with_one_upstream_request():
         "total_precipitation": 1.25,
         "peak_time": "2026-08-24T16:00",
     }
+
+
+def test_overview_uses_new_york_timezone_for_current_hour_and_window():
+    times = [f"2026-08-24T{hour:02d}:00" for hour in range(8, 24)] + [
+        f"2026-08-25T{hour:02d}:00" for hour in range(8)
+    ]
+    payload = _overview_payload(
+        timezone_name="America/New_York",
+        times=times,
+    )
+    payload["hourly"]["temperature_2m"][0] = 11.5
+    with mock.patch("app.weather.open_meteo.datetime", _FixedDatetime), mock.patch(
+        "app.weather.open_meteo.httpx.get",
+        return_value=_mock_response(payload),
+    ) as mocked_get:
+        response = client.get(
+            "/weather/overview",
+            params={"latitude": 40.7128, "longitude": -74.0060, "location": "New York"},
+        )
+
+    assert response.status_code == 200
+    assert mocked_get.call_count == 1
+    data = response.json()
+    assert data["current"]["time"] == "2026-08-24T08:00"
+    assert data["current"]["temperature"] == 11.5
+    assert len(data["hourly"]) == 24
+    assert data["hourly"][0]["time"] == "2026-08-24T08:00"
 
 
 def test_overview_uses_rain_amount_not_probability_for_next_rain():
