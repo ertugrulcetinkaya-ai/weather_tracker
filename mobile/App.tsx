@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { Button, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Button, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CurrentWeatherCard } from './src/components/CurrentWeatherCard';
 import { DailyForecast } from './src/components/DailyForecast';
@@ -31,10 +31,13 @@ export default function App() {
   } = useLocationPreferences(WEATHER_LOCATIONS[0]);
   const search = useLocationSearch();
   const deviceLocation = useDeviceLocation();
-  const { fetchedAt, overview, refresh, status: overviewStatus } = useWeatherOverview(
-    selectedLocation,
-    hydrated
-  );
+  const {
+    fetchedAt,
+    overview,
+    refresh,
+    refreshStatus,
+    status: overviewStatus,
+  } = useWeatherOverview(selectedLocation, hydrated);
 
   const handleCitySelect = (loc: WeatherLocation) => {
     deviceLocation.cancelPendingRequest();
@@ -68,9 +71,16 @@ export default function App() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
+        testID="weather-scroll-view"
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshStatus === 'loading'}
+            onRefresh={() => void refresh()}
+          />
+        }
       >
       <Text style={styles.title}>Hava Takip</Text>
 

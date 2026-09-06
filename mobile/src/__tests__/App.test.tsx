@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { RefreshControl } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { fetchWeatherOverview } from '../api/weather';
 import type { LocationGeocodedAddress, LocationPermissionResponse } from 'expo-location';
@@ -24,6 +25,14 @@ const mockedHasServicesEnabled = jest.mocked(Location.hasServicesEnabledAsync);
 const mockedRequestPermission = jest.mocked(Location.requestForegroundPermissionsAsync);
 const mockedGetCurrentPosition = jest.mocked(Location.getCurrentPositionAsync);
 const mockedReverseGeocode = jest.mocked(Location.reverseGeocodeAsync);
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 const GRANTED: LocationPermissionResponse = {
   granted: true,
@@ -102,5 +111,94 @@ describe('App device location wiring', () => {
         expect.anything()
       )
     );
+  });
+});
+
+describe('App pull-to-refresh', () => {
+  it('invokes the existing refresh exactly once when the user pulls to refresh', async () => {
+    const { getByText, getByTestId } = await render(<App />);
+
+    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
+
+    const scrollView = getByTestId('weather-scroll-view');
+    const refreshControl = scrollView.props.refreshControl;
+
+    await act(async () => {
+      refreshControl.props.onRefresh();
+    });
+
+    expect(refreshControl.props.refreshing).toBe(false);
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps loading refreshStatus to RefreshControl refreshing true and keeps the displayed weather present while pending', async () => {
+    const initial = deferred<WeatherOverview>();
+    mockedFetchWeatherOverview.mockReturnValueOnce(initial.promise);
+
+    const { getByText, getByTestId } = await render(<App />);
+
+    await act(async () => {
+      initial.resolve(overview('Elazığ'));
+    });
+
+    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+
+    const pending = deferred<WeatherOverview>();
+    mockedFetchWeatherOverview.mockReturnValueOnce(pending.promise);
+
+    let scrollView = getByTestId('weather-scroll-view');
+    await act(async () => {
+      scrollView.props.refreshControl.props.onRefresh();
+    });
+
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
+    expect(getByText('Backend: Bağlı')).toBeOnTheScreen();
+
+    scrollView = getByTestId('weather-scroll-view');
+    const refreshControl = scrollView.props.refreshControl;
+    expect(refreshControl.type).toBe(RefreshControl);
+    expect(refreshControl.props.refreshing).toBe(true);
+    expect(getByText('Backend: Bağlı')).toBeOnTheScreen();
+    expect(getByText('21°')).toBeOnTheScreen();
+
+    await act(async () => {
+      pending.resolve(overview('Elazığ'));
+    });
+  });
+
+  it('maps idle refreshStatus to RefreshControl refreshing false', async () => {
+    const { getByText, getByTestId } = await render(<App />);
+
+    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+
+    const scrollView = getByTestId('weather-scroll-view');
+    const refreshControl = scrollView.props.refreshControl;
+    expect(refreshControl.type).toBe(RefreshControl);
+    expect(refreshControl.props.refreshing).toBe(false);
+  });
+
+  it('maps error refreshStatus to RefreshControl refreshing false', async () => {
+    const { getByText, getByTestId } = await render(<App />);
+
+    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+
+    mockedFetchWeatherOverview.mockRejectedValueOnce(new Error('offline'));
+
+    const scrollView = getByTestId('weather-scroll-view');
+    await act(async () => {
+      scrollView.props.refreshControl.props.onRefresh();
+    });
+
+    await waitFor(() => {
+      const updated = getByTestId('weather-scroll-view');
+      expect(updated.props.refreshControl.props.refreshing).toBe(false);
+    });
+
+    expect(getByText('21°')).toBeOnTheScreen();
+
+    const refreshControl = getByTestId('weather-scroll-view').props.refreshControl;
+    expect(refreshControl.type).toBe(RefreshControl);
+    expect(refreshControl.props.refreshing).toBe(false);
   });
 });
