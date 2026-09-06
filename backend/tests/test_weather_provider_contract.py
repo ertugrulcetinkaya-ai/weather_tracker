@@ -145,6 +145,15 @@ def test_provider_timezone_is_required():
     assert "timezone" in response.json()["detail"]
 
 
+def test_forecast_request_explicitly_uses_kmh_wind_speed_unit():
+    payload = _payload(["2026-08-25T12:00", "2026-08-25T13:00"], _hourly_fields())
+    response = _mock_response(payload)
+    with mock.patch("app.weather.open_meteo.httpx.get", return_value=response) as mocked_get:
+        result = client.get("/weather/hourly")
+    assert result.status_code == 200
+    assert mocked_get.call_args.kwargs["params"]["wind_speed_unit"] == "kmh"
+
+
 @pytest.mark.parametrize(
     "timezone_value",
     ["", "   ", "Not/A_Timezone", None, 123, True, [], {}],

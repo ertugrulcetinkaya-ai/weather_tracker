@@ -72,6 +72,7 @@ def test_weather_current_success():
         "timezone": "auto",
         "forecast_days": 7,
         "forecast_hours": 24,
+        "wind_speed_unit": "kmh",
     }
 
 

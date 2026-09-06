@@ -42,19 +42,19 @@ describe('CurrentWeatherCard', () => {
     expect(getByText('%63')).toBeTruthy();
   });
 
-  it('shows wind speed with the km/s unit', async () => {
+  it('shows wind speed with the km/h unit', async () => {
     const { getByText } = await render(<CurrentWeatherCard current={current} />);
 
     expect(getByText('Rüzgâr')).toBeTruthy();
-    expect(getByText('14.2 km/s')).toBeTruthy();
+    expect(getByText('14.2 km/h')).toBeTruthy();
   });
 
   it('rounds wind speed to one decimal and removes trailing zeroes', async () => {
     const { getByText } = await render(
-      <CurrentWeatherCard current={{ ...current, wind_speed: 7.26 }} />,
+      <CurrentWeatherCard current={{ ...current, wind_speed: 7.234 }} />,
     );
 
-    expect(getByText('7.3 km/s')).toBeTruthy();
+    expect(getByText('7.2 km/h')).toBeTruthy();
   });
 
   it('shows the condition label and emoji for the weather code', async () => {

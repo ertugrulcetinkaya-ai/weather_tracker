@@ -360,6 +360,7 @@ def _fetch_forecast_payload(
         "timezone": "auto",
         "forecast_days": FORECAST_DAYS,
         "forecast_hours": FORECAST_HOURS,
+        "wind_speed_unit": "kmh",
     }
     if daily_fields is not None:
         params["daily"] = ",".join(daily_fields)

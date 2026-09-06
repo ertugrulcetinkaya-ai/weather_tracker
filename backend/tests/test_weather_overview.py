@@ -113,6 +113,7 @@ def test_overview_builds_screen_with_one_upstream_request():
         "timezone": "auto",
         "forecast_days": 7,
         "forecast_hours": 24,
+        "wind_speed_unit": "kmh",
     }
 
     data = response.json()

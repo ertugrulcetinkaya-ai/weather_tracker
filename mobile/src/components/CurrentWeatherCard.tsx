@@ -32,7 +32,7 @@ export function CurrentWeatherCard({ current }: CurrentWeatherCardProps) {
         <View style={styles.metric}>
           <Text style={styles.metricLabel}>Rüzgâr</Text>
           <Text style={styles.metricValue}>
-            {formatWindSpeed(current.wind_speed)} km/s
+            {formatWindSpeed(current.wind_speed)} km/h
           </Text>
         </View>
       </View>
