@@ -31,7 +31,7 @@ export default function App() {
   } = useLocationPreferences(WEATHER_LOCATIONS[0]);
   const search = useLocationSearch();
   const deviceLocation = useDeviceLocation();
-  const { overview, refresh, status: overviewStatus } = useWeatherOverview(
+  const { fetchedAt, overview, refresh, status: overviewStatus } = useWeatherOverview(
     selectedLocation,
     hydrated
   );
@@ -103,7 +103,7 @@ export default function App() {
         </View>
       )}
       {overviewStatus === 'ready' && overview !== null && (
-        <CurrentWeatherCard current={overview.current} />
+        <CurrentWeatherCard current={overview.current} fetchedAt={fetchedAt} />
       )}
 
       {overviewStatus === 'ready' && overview !== null && (

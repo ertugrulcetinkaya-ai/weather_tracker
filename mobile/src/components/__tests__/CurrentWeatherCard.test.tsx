@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 
 import { CurrentWeatherCard } from '../CurrentWeatherCard';
 import type { CurrentWeather } from '../../types/weather';
@@ -69,4 +69,68 @@ describe('CurrentWeatherCard', () => {
 
     expect(getByText('14:30 itibarıyla')).toBeTruthy();
   });
+
+  describe('last-updated indicator', () => {
+    it('renders no last-updated label when fetchedAt is null', async () => {
+      const { queryByText } = await render(
+        <CurrentWeatherCard current={current} fetchedAt={null} />,
+      );
+
+      expect(queryByText(/^Son güncelleme: /)).toBeNull();
+    });
+
+    it('renders no last-updated label when fetchedAt is absent (backwards compatible)', async () => {
+      const { queryByText } = await render(
+        <CurrentWeatherCard current={current} />,
+      );
+
+      expect(queryByText(/^Son güncelleme: /)).toBeNull();
+    });
+
+    it('renders a Turkish last-updated label with HH:MM derived from fetchedAt', async () => {
+      // Fix the clock so Date/toLocaleTimeString is deterministic and timezone-safe:
+      // construct the expected string using the same local-time formatting path.
+      const timestamp = new Date(2025, 5, 15, 9, 7).getTime();
+      const expectedTime = new Date(timestamp).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+
+      const { getByText } = await render(
+        <CurrentWeatherCard current={current} fetchedAt={timestamp} />,
+      );
+
+      expect(getByText(`Son güncelleme: ${expectedTime}`)).toBeTruthy();
+    });
+
+    it('rerenders with a new fetchedAt value', async () => {
+      const first = new Date(2025, 5, 15, 9, 7).getTime();
+      const second = new Date(2025, 5, 15, 18, 42).getTime();
+
+      const { getByText, rerender } = await render(
+        <CurrentWeatherCard current={current} fetchedAt={first} />,
+      );
+
+      expect(
+        getByText(`Son güncelleme: ${formatTime(first)}`),
+      ).toBeTruthy();
+
+      await act(async () => {
+        rerender(<CurrentWeatherCard current={current} fetchedAt={second} />);
+      });
+
+      expect(
+        getByText(`Son güncelleme: ${formatTime(second)}`),
+      ).toBeTruthy();
+    });
+  });
 });
+
+function formatTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}

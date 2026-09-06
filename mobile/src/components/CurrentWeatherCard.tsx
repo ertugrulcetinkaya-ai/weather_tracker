@@ -6,9 +6,19 @@ import { formatWindSpeed } from '../weather/format';
 
 type CurrentWeatherCardProps = {
   current: CurrentWeather;
+  fetchedAt?: number | null;
 };
 
-export function CurrentWeatherCard({ current }: CurrentWeatherCardProps) {
+function formatLastUpdated(fetchedAt: number): string {
+  const time = new Date(fetchedAt).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return `Son güncelleme: ${time}`;
+}
+
+export function CurrentWeatherCard({ current, fetchedAt }: CurrentWeatherCardProps) {
   return (
     <View style={styles.card}>
       <Text style={styles.emoji}>
@@ -23,6 +33,9 @@ export function CurrentWeatherCard({ current }: CurrentWeatherCardProps) {
         Hissedilen {Math.round(current.apparent_temperature)}°
       </Text>
       <Text style={styles.updatedAt}>{formatWeatherTime(current.time)}</Text>
+      {fetchedAt !== null && fetchedAt !== undefined && (
+        <Text style={styles.lastUpdated}>{formatLastUpdated(fetchedAt)}</Text>
+      )}
       <View style={styles.divider} />
       <View style={styles.row}>
         <View style={styles.metric}>
@@ -79,6 +92,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     marginTop: 8,
+  },
+  lastUpdated: {
+    fontSize: 11,
+    color: '#9aa5b1',
+    marginTop: 4,
   },
   divider: {
     width: '100%',
