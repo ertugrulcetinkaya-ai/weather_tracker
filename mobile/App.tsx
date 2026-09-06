@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { Button, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { AppState, Button, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CurrentWeatherCard } from './src/components/CurrentWeatherCard';
 import { DailyForecast } from './src/components/DailyForecast';
@@ -67,6 +68,33 @@ export default function App() {
       search.reset();
     });
   };
+
+  const previousAppStateRef = useRef<AppState['currentState']>(AppState.currentState);
+  const refreshRef = useRef(refresh);
+  const refreshStatusRef = useRef(refreshStatus);
+
+  useEffect(() => {
+    refreshRef.current = refresh;
+    refreshStatusRef.current = refreshStatus;
+  }, [refresh, refreshStatus]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const previousAppState = previousAppStateRef.current;
+      previousAppStateRef.current = nextAppState;
+
+      const isForegroundTransition =
+        (previousAppState === 'background' || previousAppState === 'inactive') &&
+        nextAppState === 'active';
+
+      if (!isForegroundTransition) return;
+      if (refreshStatusRef.current === 'loading') return;
+
+      void refreshRef.current();
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>

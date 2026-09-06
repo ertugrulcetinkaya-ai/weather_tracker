@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { RefreshControl } from 'react-native';
+import { AppState, RefreshControl } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { fetchWeatherOverview } from '../api/weather';
@@ -15,10 +15,47 @@ jest.mock('expo-location', () => ({
   reverseGeocodeAsync: jest.fn(),
 }));
 
+
+
 jest.mock('../api/weather', () => ({
   fetchWeatherOverview: jest.fn(),
   searchLocations: jest.fn(),
 }));
+
+jest.mock('../storage/weatherCache', () => ({
+  loadWeatherCache: jest.fn(async () => null),
+  saveWeatherCache: jest.fn(async () => undefined),
+}));
+
+type AppStateStatus = 'active' | 'background' | 'inactive';
+type AppStateListener = (nextAppState: AppStateStatus) => void;
+type AppStateSubscription = { remove: jest.Mock };
+
+const mockAppStateListeners: AppStateListener[] = [];
+
+jest.spyOn(AppState, 'addEventListener').mockImplementation(
+  (_type, listener) => {
+    const subscription = { remove: jest.fn() } as unknown as AppStateSubscription;
+    mockAppStateListeners.push(listener);
+    subscription.remove.mockImplementation(() => {
+      const index = mockAppStateListeners.indexOf(listener);
+      if (index >= 0) {
+        mockAppStateListeners.splice(index, 1);
+      }
+    });
+    return subscription;
+  }
+);
+const mockAddEventListener = AppState.addEventListener as unknown as jest.Mock<
+  AppStateSubscription,
+  ['change', AppStateListener]
+>;
+
+async function emitAppStateChange(nextAppState: AppStateStatus) {
+  await act(async () => {
+    mockAppStateListeners.forEach((listener) => listener(nextAppState));
+  });
+}
 
 const mockedFetchWeatherOverview = jest.mocked(fetchWeatherOverview);
 const mockedHasServicesEnabled = jest.mocked(Location.hasServicesEnabledAsync);
@@ -74,6 +111,19 @@ function overview(location: string): WeatherOverview {
 }
 
 beforeEach(() => {
+  mockAppStateListeners.length = 0;
+  mockAddEventListener.mockImplementation((_type, listener) => {
+    const subscription = { remove: jest.fn() } as unknown as AppStateSubscription;
+    mockAppStateListeners.push(listener);
+    subscription.remove.mockImplementation(() => {
+      const index = mockAppStateListeners.indexOf(listener);
+      if (index >= 0) {
+        mockAppStateListeners.splice(index, 1);
+      }
+    });
+    return subscription;
+  });
+
   mockedFetchWeatherOverview.mockResolvedValue(overview('Elazığ'));
   mockedHasServicesEnabled.mockResolvedValue(true);
   mockedRequestPermission.mockResolvedValue(GRANTED);
@@ -200,5 +250,98 @@ describe('App pull-to-refresh', () => {
     const refreshControl = getByTestId('weather-scroll-view').props.refreshControl;
     expect(refreshControl.type).toBe(RefreshControl);
     expect(refreshControl.props.refreshing).toBe(false);
+  });
+});
+
+describe('App foreground auto-refresh', () => {
+  it('does not trigger an extra refresh on initial mount while already active', async () => {
+    const { getByText } = await render(<App />);
+
+    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it('triggers exactly one refresh on a background to active transition', async () => {
+    const { getByText } = await render(<App />);
+
+    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
+
+    await emitAppStateChange('background');
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
+
+    await emitAppStateChange('active');
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
+  });
+
+  it('triggers exactly one refresh on an inactive to active transition', async () => {
+    const { getByText } = await render(<App />);
+
+    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
+
+    await emitAppStateChange('inactive');
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
+
+    await emitAppStateChange('active');
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not trigger a refresh on an active to active transition', async () => {
+    const { getByText } = await render(<App />);
+
+    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
+
+    await emitAppStateChange('active');
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes the AppState listener on unmount', async () => {
+    const { getByText, unmount } = await render(<App />);
+
+    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    expect(mockAddEventListener).toHaveBeenCalledWith('change', expect.any(Function));
+
+    const subscription = mockAddEventListener.mock.results[mockAddEventListener.mock.results.length - 1]
+      .value as AppStateSubscription;
+    await act(async () => {
+      unmount();
+    });
+
+    expect(subscription.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a foreground refresh while refreshStatus is loading and keeps current weather visible', async () => {
+    const initial = deferred<WeatherOverview>();
+    mockedFetchWeatherOverview.mockReturnValueOnce(initial.promise);
+
+    const { getByText } = await render(<App />);
+
+    await act(async () => {
+      initial.resolve(overview('Elazığ'));
+    });
+
+    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
+
+    const pending = deferred<WeatherOverview>();
+    mockedFetchWeatherOverview.mockReturnValueOnce(pending.promise);
+
+    await emitAppStateChange('background');
+    await emitAppStateChange('active');
+
+    await waitFor(() => expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2));
+
+    await emitAppStateChange('background');
+    await emitAppStateChange('active');
+
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
+    expect(getByText('21°')).toBeOnTheScreen();
+    expect(getByText('Backend: Bağlı')).toBeOnTheScreen();
+
+    await act(async () => {
+      pending.resolve(overview('Elazığ'));
+    });
   });
 });
