@@ -12,12 +12,12 @@ const mockedFetchWeatherOverview = jest.mocked(fetchWeatherOverview);
 const ELAZIG: WeatherLocation = { name: 'Elazığ', latitude: 38.6743, longitude: 39.2232 };
 const ANKARA: WeatherLocation = { name: 'Ankara', latitude: 39.9334, longitude: 32.8597 };
 
-function overview(location: WeatherLocation): WeatherOverview {
+function overview(location: WeatherLocation, temperature = 24): WeatherOverview {
   return {
     current: {
       location: location.name,
-      temperature: 24,
-      apparent_temperature: 24,
+      temperature,
+      apparent_temperature: temperature,
       humidity: 50,
       wind_speed: 8,
       weather_code: 1,
@@ -26,7 +26,7 @@ function overview(location: WeatherLocation): WeatherOverview {
     hourly: [
       {
         time: '2026-08-30T12:00',
-        temperature: 24,
+        temperature,
         precipitation: 0,
         precipitation_probability: 20,
         weather_code: 1,
@@ -36,8 +36,8 @@ function overview(location: WeatherLocation): WeatherOverview {
     daily: [
       {
         date: '2026-08-30',
-        temperature_max: 29,
-        temperature_min: 18,
+        temperature_max: temperature + 5,
+        temperature_min: temperature - 6,
         precipitation: 0.4,
         precipitation_probability: 20,
         weather_code: 1,
@@ -49,10 +49,12 @@ function overview(location: WeatherLocation): WeatherOverview {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
@@ -77,16 +79,62 @@ describe('useWeatherOverview', () => {
     expect(mockedFetchWeatherOverview).toHaveBeenCalledWith(ELAZIG, expect.any(AbortSignal));
   });
 
-  test('aborts stale location requests and keeps the newest snapshot', async () => {
-    const first = deferred<WeatherOverview>();
-    const second = deferred<WeatherOverview>();
-    let firstSignal: AbortSignal | undefined;
+  test('preserves the snapshot while an explicit refresh is pending and replaces it on success', async () => {
+    const refreshed = deferred<WeatherOverview>();
     mockedFetchWeatherOverview
+      .mockResolvedValueOnce(overview(ELAZIG))
+      .mockImplementationOnce(() => refreshed.promise);
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.overview?.current.temperature).toBe(24);
+
+    await act(async () => {
+      void result.current.refresh();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2));
+
+    expect(result.current.overview?.current.location).toBe('Elazığ');
+    expect(result.current.refreshStatus).toBe('loading');
+
+    await act(async () => {
+      refreshed.resolve(overview(ELAZIG, 31));
+      await refreshed.promise;
+    });
+
+    expect(result.current.status).toBe('ready');
+    expect(result.current.overview?.current.temperature).toBe(31);
+    expect(result.current.refreshStatus).toBe('idle');
+  });
+
+  test('preserves the snapshot when an explicit refresh fails', async () => {
+    mockedFetchWeatherOverview
+      .mockResolvedValueOnce(overview(ELAZIG))
+      .mockRejectedValueOnce(new Error('refresh failed'));
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.status).toBe('ready');
+    expect(result.current.overview?.current.location).toBe('Elazığ');
+    expect(result.current.refreshStatus).toBe('error');
+  });
+
+  test('aborts the stale refresh on location change and clears the old snapshot', async () => {
+    const staleRefresh = deferred<WeatherOverview>();
+    const ankara = deferred<WeatherOverview>();
+    let staleSignal: AbortSignal | undefined;
+    mockedFetchWeatherOverview
+      .mockResolvedValueOnce(overview(ELAZIG))
       .mockImplementationOnce((_location, signal) => {
-        firstSignal = signal;
-        return first.promise;
+        staleSignal = signal;
+        return staleRefresh.promise;
       })
-      .mockImplementationOnce(() => second.promise);
+      .mockImplementationOnce(() => ankara.promise);
     const { result, rerender } = await renderHook<
       ReturnType<typeof useWeatherOverview>,
       { location: WeatherLocation }
@@ -95,18 +143,29 @@ describe('useWeatherOverview', () => {
       { initialProps: { location: ELAZIG } }
     );
 
-    await rerender({ location: ANKARA });
-    expect(firstSignal?.aborted).toBe(true);
-
+    await waitFor(() => expect(result.current.status).toBe('ready'));
     await act(async () => {
-      second.resolve(overview(ANKARA));
-      await second.promise;
+      void result.current.refresh();
+      await Promise.resolve();
     });
-    expect(result.current.overview?.current.location).toBe('Ankara');
+    await waitFor(() => expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2));
+    expect(result.current.overview?.current.location).toBe('Elazığ');
+
+    await rerender({ location: ANKARA });
+    expect(staleSignal?.aborted).toBe(true);
+    expect(result.current.overview).toBeNull();
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(3));
 
     await act(async () => {
-      first.resolve(overview(ELAZIG));
-      await first.promise;
+      staleRefresh.resolve(overview(ELAZIG, 99));
+      await staleRefresh.promise;
+    });
+    expect(result.current.overview).toBeNull();
+
+    await act(async () => {
+      ankara.resolve(overview(ANKARA));
+      await ankara.promise;
     });
     expect(result.current.overview?.current.location).toBe('Ankara');
   });
