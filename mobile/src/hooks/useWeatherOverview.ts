@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchWeatherOverview } from '../api/weather';
-import { saveWeatherCache } from '../storage/weatherCache';
+import { loadWeatherCache, saveWeatherCache } from '../storage/weatherCache';
 import type { WeatherLocation, WeatherOverview } from '../types/weather';
 
 type OverviewStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -30,9 +30,28 @@ export function useWeatherOverview(location: WeatherLocation, enabled: boolean) 
         setRefreshStatus('idle');
       }
 
+      let networkAccepted = false;
+      let activeNetworkFailure = false;
+
+      if (!preserveExisting) {
+        void loadWeatherCache(location)
+          .then((cached) => {
+            if (networkAccepted) return;
+            if (controller.signal.aborted || controllerRef.current !== controller) return;
+            if (cached === null) return;
+            networkAccepted = true;
+            overviewRef.current = cached.overview;
+            setOverview(cached.overview);
+            setStatus('ready');
+            setRefreshStatus(activeNetworkFailure ? 'error' : 'loading');
+          })
+          .catch(() => undefined);
+      }
+
       try {
         const data = await fetchWeatherOverview(location, controller.signal);
         if (controller.signal.aborted || controllerRef.current !== controller) return;
+        networkAccepted = true;
         overviewRef.current = data;
         setOverview(data);
         setStatus('ready');
@@ -40,7 +59,13 @@ export function useWeatherOverview(location: WeatherLocation, enabled: boolean) 
         void saveWeatherCache(location, data).catch(() => undefined);
       } catch {
         if (controller.signal.aborted || controllerRef.current !== controller) return;
-        if (hasExistingSnapshot) {
+        if (!hasExistingSnapshot && overviewRef.current === null) {
+          networkAccepted = false;
+          activeNetworkFailure = true;
+        } else {
+          networkAccepted = true;
+        }
+        if (hasExistingSnapshot || overviewRef.current !== null) {
           setStatus('ready');
           setRefreshStatus('error');
         } else {

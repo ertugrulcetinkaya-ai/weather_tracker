@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { fetchWeatherOverview } from '../../api/weather';
-import { saveWeatherCache } from '../../storage/weatherCache';
+import { loadWeatherCache, saveWeatherCache } from '../../storage/weatherCache';
 import type { WeatherLocation, WeatherOverview } from '../../types/weather';
 import { useWeatherOverview } from '../useWeatherOverview';
 
@@ -10,10 +10,12 @@ jest.mock('../../api/weather', () => ({
 }));
 
 jest.mock('../../storage/weatherCache', () => ({
+  loadWeatherCache: jest.fn(),
   saveWeatherCache: jest.fn(),
 }));
 
 const mockedFetchWeatherOverview = jest.mocked(fetchWeatherOverview);
+const mockedLoadWeatherCache = jest.mocked(loadWeatherCache);
 const mockedSaveWeatherCache = jest.mocked(saveWeatherCache);
 const ELAZIG: WeatherLocation = { name: 'Elazığ', latitude: 38.6743, longitude: 39.2232 };
 const ANKARA: WeatherLocation = { name: 'Ankara', latitude: 39.9334, longitude: 32.8597 };
@@ -63,10 +65,16 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+function cacheRecord(location: WeatherLocation, temperature = 18) {
+  return { version: 1 as const, location, fetchedAt: 1, overview: overview(location, temperature) };
+}
+
 beforeEach(() => {
   mockedFetchWeatherOverview.mockReset();
   mockedSaveWeatherCache.mockReset();
+  mockedLoadWeatherCache.mockReset();
   mockedSaveWeatherCache.mockResolvedValue(undefined);
+  mockedLoadWeatherCache.mockResolvedValue(null);
 });
 
 describe('useWeatherOverview', () => {
@@ -224,5 +232,195 @@ describe('useWeatherOverview', () => {
     await unmount();
 
     expect(signal?.aborted).toBe(true);
+  });
+
+  test('hydrates from an active cache while the network request is pending', async () => {
+    const network = deferred<WeatherOverview>();
+    mockedLoadWeatherCache.mockResolvedValue(cacheRecord(ELAZIG, 18));
+    mockedFetchWeatherOverview.mockImplementation(() => network.promise);
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.overview?.current.temperature).toBe(18);
+    expect(result.current.refreshStatus).toBe('loading');
+
+    await act(async () => {
+      network.resolve(overview(ELAZIG, 24));
+      await network.promise;
+    });
+
+    expect(result.current.overview?.current.temperature).toBe(24);
+    expect(result.current.status).toBe('ready');
+    expect(result.current.refreshStatus).toBe('idle');
+    expect(mockedSaveWeatherCache).toHaveBeenCalledWith(ELAZIG, result.current.overview);
+  });
+
+  test('does not read cache when the hook is disabled', async () => {
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, false));
+
+    expect(result.current.status).toBe('idle');
+    expect(mockedLoadWeatherCache).not.toHaveBeenCalled();
+    expect(mockedFetchWeatherOverview).not.toHaveBeenCalled();
+  });
+
+  test('does not read cache during an explicit refresh', async () => {
+    mockedFetchWeatherOverview.mockResolvedValueOnce(overview(ELAZIG));
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(mockedLoadWeatherCache).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
+    expect(mockedLoadWeatherCache).toHaveBeenCalledTimes(1);
+  });
+
+  test('swallows a cache read rejection and surfaces only the network outcome', async () => {
+    mockedLoadWeatherCache.mockRejectedValueOnce(new Error('storage unavailable'));
+    mockedFetchWeatherOverview.mockResolvedValueOnce(overview(ELAZIG));
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.overview?.current.location).toBe('Elazığ');
+    expect(result.current.refreshStatus).toBe('idle');
+  });
+
+  test('keeps network data authoritative when the cache resolves later', async () => {
+    const cache = deferred<Awaited<ReturnType<typeof loadWeatherCache>>>();
+    mockedLoadWeatherCache.mockReturnValue(cache.promise);
+    mockedFetchWeatherOverview.mockResolvedValueOnce(overview(ELAZIG, 24));
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.overview?.current.temperature).toBe(24);
+
+    await act(async () => {
+      cache.resolve(cacheRecord(ELAZIG, 18));
+      await cache.promise;
+    });
+
+    expect(result.current.overview?.current.temperature).toBe(24);
+    expect(result.current.refreshStatus).toBe('idle');
+  });
+
+  test('keeps a hydrated cache snapshot ready when the network request fails', async () => {
+    mockedLoadWeatherCache.mockResolvedValueOnce(cacheRecord(ELAZIG, 18));
+    mockedFetchWeatherOverview.mockRejectedValueOnce(new Error('network'));
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.overview?.current.temperature).toBe(18);
+    expect(result.current.status).toBe('ready');
+    expect(result.current.refreshStatus).toBe('error');
+  });
+
+  test('hydrates from a still-active cache after the network request fails', async () => {
+    const cache = deferred<Awaited<ReturnType<typeof loadWeatherCache>>>();
+    mockedLoadWeatherCache.mockReturnValue(cache.promise);
+    mockedFetchWeatherOverview.mockRejectedValueOnce(new Error('network'));
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(mockedLoadWeatherCache).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      cache.resolve(cacheRecord(ELAZIG, 18));
+      await cache.promise;
+    });
+
+    expect(result.current.overview?.current.temperature).toBe(18);
+    expect(result.current.status).toBe('ready');
+    expect(result.current.refreshStatus).toBe('error');
+  });
+
+  test('shows loading with no overview during a cache miss while network is pending', async () => {
+    const network = deferred<WeatherOverview>();
+    mockedLoadWeatherCache.mockResolvedValueOnce(null);
+    mockedFetchWeatherOverview.mockImplementation(() => network.promise);
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(mockedLoadWeatherCache).toHaveBeenCalledTimes(1));
+
+    expect(result.current.overview).toBeNull();
+    expect(result.current.status).toBe('loading');
+    expect(result.current.refreshStatus).toBe('idle');
+
+    await act(async () => {
+      network.resolve(overview(ELAZIG, 24));
+      await network.promise;
+    });
+
+    expect(result.current.overview?.current.location).toBe('Elazığ');
+    expect(result.current.status).toBe('ready');
+    expect(result.current.refreshStatus).toBe('idle');
+  });
+
+  test('discards a stale cache read after the location is superseded', async () => {
+    const elazigCache = deferred<Awaited<ReturnType<typeof loadWeatherCache>>>();
+    mockedLoadWeatherCache.mockImplementation((location) => {
+      if (location.name === 'Elazığ') return elazigCache.promise;
+      return Promise.resolve(null);
+    });
+    const ankara = deferred<WeatherOverview>();
+    mockedFetchWeatherOverview
+      .mockImplementationOnce(() => new Promise<never>(() => undefined))
+      .mockImplementationOnce(() => ankara.promise);
+    const { result, rerender } = await renderHook<
+      ReturnType<typeof useWeatherOverview>,
+      { location: WeatherLocation }
+    >(
+      ({ location }) => useWeatherOverview(location, true),
+      { initialProps: { location: ELAZIG } }
+    );
+
+    await waitFor(() => expect(mockedLoadWeatherCache).toHaveBeenCalledTimes(1));
+
+    await rerender({ location: ANKARA });
+
+    await act(async () => {
+      elazigCache.resolve(cacheRecord(ELAZIG, 18));
+      await elazigCache.promise;
+    });
+
+    expect(result.current.overview).toBeNull();
+    expect(mockedLoadWeatherCache).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      ankara.resolve(overview(ANKARA));
+      await ankara.promise;
+    });
+
+    expect(result.current.overview?.current.location).toBe('Ankara');
+  });
+
+  test('keeps an explicit retry network-only after an initial failed load', async () => {
+    mockedLoadWeatherCache.mockResolvedValueOnce(null);
+    mockedFetchWeatherOverview
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(overview(ELAZIG));
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(mockedLoadWeatherCache).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
+    expect(mockedLoadWeatherCache).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toBe('ready');
+    expect(result.current.overview?.current.location).toBe('Elazığ');
   });
 });
