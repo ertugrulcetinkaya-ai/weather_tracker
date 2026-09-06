@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchWeatherOverview } from '../api/weather';
+import { saveWeatherCache } from '../storage/weatherCache';
 import type { WeatherLocation, WeatherOverview } from '../types/weather';
 
 type OverviewStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -36,6 +37,7 @@ export function useWeatherOverview(location: WeatherLocation, enabled: boolean) 
         setOverview(data);
         setStatus('ready');
         setRefreshStatus('idle');
+        void saveWeatherCache(location, data).catch(() => undefined);
       } catch {
         if (controller.signal.aborted || controllerRef.current !== controller) return;
         if (hasExistingSnapshot) {

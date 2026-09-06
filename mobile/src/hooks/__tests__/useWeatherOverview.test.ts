@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { fetchWeatherOverview } from '../../api/weather';
+import { saveWeatherCache } from '../../storage/weatherCache';
 import type { WeatherLocation, WeatherOverview } from '../../types/weather';
 import { useWeatherOverview } from '../useWeatherOverview';
 
@@ -8,7 +9,12 @@ jest.mock('../../api/weather', () => ({
   fetchWeatherOverview: jest.fn(),
 }));
 
+jest.mock('../../storage/weatherCache', () => ({
+  saveWeatherCache: jest.fn(),
+}));
+
 const mockedFetchWeatherOverview = jest.mocked(fetchWeatherOverview);
+const mockedSaveWeatherCache = jest.mocked(saveWeatherCache);
 const ELAZIG: WeatherLocation = { name: 'Elazığ', latitude: 38.6743, longitude: 39.2232 };
 const ANKARA: WeatherLocation = { name: 'Ankara', latitude: 39.9334, longitude: 32.8597 };
 
@@ -59,6 +65,8 @@ function deferred<T>() {
 
 beforeEach(() => {
   mockedFetchWeatherOverview.mockReset();
+  mockedSaveWeatherCache.mockReset();
+  mockedSaveWeatherCache.mockResolvedValue(undefined);
 });
 
 describe('useWeatherOverview', () => {
@@ -77,6 +85,7 @@ describe('useWeatherOverview', () => {
 
     expect(result.current.overview?.current.location).toBe('Elazığ');
     expect(mockedFetchWeatherOverview).toHaveBeenCalledWith(ELAZIG, expect.any(AbortSignal));
+    expect(mockedSaveWeatherCache).toHaveBeenCalledWith(ELAZIG, result.current.overview);
   });
 
   test('preserves the snapshot while an explicit refresh is pending and replaces it on success', async () => {
@@ -106,6 +115,7 @@ describe('useWeatherOverview', () => {
     expect(result.current.status).toBe('ready');
     expect(result.current.overview?.current.temperature).toBe(31);
     expect(result.current.refreshStatus).toBe('idle');
+    expect(mockedSaveWeatherCache).toHaveBeenLastCalledWith(ELAZIG, result.current.overview);
   });
 
   test('preserves the snapshot when an explicit refresh fails', async () => {
@@ -122,6 +132,8 @@ describe('useWeatherOverview', () => {
     expect(result.current.status).toBe('ready');
     expect(result.current.overview?.current.location).toBe('Elazığ');
     expect(result.current.refreshStatus).toBe('error');
+    expect(mockedSaveWeatherCache).toHaveBeenCalledTimes(1);
+    expect(mockedSaveWeatherCache).toHaveBeenCalledWith(ELAZIG, result.current.overview);
   });
 
   test('aborts the stale refresh on location change and clears the old snapshot', async () => {
@@ -162,6 +174,7 @@ describe('useWeatherOverview', () => {
       await staleRefresh.promise;
     });
     expect(result.current.overview).toBeNull();
+    expect(mockedSaveWeatherCache).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       ankara.resolve(overview(ANKARA));
@@ -177,9 +190,25 @@ describe('useWeatherOverview', () => {
     const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
 
     await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(mockedSaveWeatherCache).not.toHaveBeenCalled();
     await act(async () => result.current.refresh());
 
     expect(result.current.status).toBe('ready');
+    expect(result.current.overview?.current.location).toBe('Elazığ');
+  });
+
+  test('keeps overview ready when cache persistence rejects', async () => {
+    mockedFetchWeatherOverview.mockResolvedValue(overview(ELAZIG));
+    mockedSaveWeatherCache.mockRejectedValueOnce(new Error('storage unavailable'));
+    const { result } = await renderHook(() => useWeatherOverview(ELAZIG, true));
+
+    await waitFor(() => expect(mockedSaveWeatherCache).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.status).toBe('ready');
+    expect(result.current.refreshStatus).toBe('idle');
     expect(result.current.overview?.current.location).toBe('Elazığ');
   });
 
