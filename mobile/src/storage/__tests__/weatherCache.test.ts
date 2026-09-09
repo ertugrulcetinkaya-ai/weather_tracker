@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadWeatherCache, saveWeatherCache } from '../weatherCache';
+import { parseWeatherOverview } from '../../validation/weather';
 import type { WeatherLocation, WeatherOverview } from '../../types/weather';
 
 jest.mock('@react-native-async-storage/async-storage', () => {
@@ -287,10 +288,110 @@ describe('loadWeatherCache', () => {
     expect(await loadWeatherCache(location)).toBeNull();
   });
 
+  it('returns the full shared-contract payload for a valid complete 24-hour/7-day cache record', async () => {
+    const fetchedAt = 1700000000000;
+    const overview = buildOverview();
+    seedRecord({ fetchedAt, overview });
+
+    const loaded = await loadWeatherCache(location);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.version).toBe(1);
+    expect(loaded!.fetchedAt).toBe(fetchedAt);
+    expect(loaded!.location).toEqual(location);
+    expect(loaded!.overview.hourly).toHaveLength(24);
+    expect(loaded!.overview.daily).toHaveLength(7);
+    expect(loaded!.overview).toEqual(overview);
+  });
+
+  describe('delegates overview validation to the shared WeatherOverview contract', () => {
+    function mutateHourly(
+      mutate: (record: Record<string, unknown>) => Record<string, unknown>
+    ): WeatherOverview {
+      const overview = buildOverview();
+      return {
+        ...overview,
+        hourly: overview.hourly.map((record) => mutate({ ...record }) as WeatherOverview['hourly'][number]),
+      };
+    }
+
+    function mutateDaily(
+      mutate: (record: Record<string, unknown>) => Record<string, unknown>
+    ): WeatherOverview {
+      const overview = buildOverview();
+      return {
+        ...overview,
+        daily: overview.daily.map((record) => mutate({ ...record }) as WeatherOverview['daily'][number]),
+      };
+    }
+
+    const invalidCases: Array<[string, WeatherOverview]> = [
+      [
+        'invalid current temperature string',
+        {
+          ...buildOverview(),
+          current: {
+            ...buildOverview().current,
+            temperature: '22.5' as unknown as number,
+          },
+        },
+      ],
+      [
+        'invalid hourly numeric string',
+        mutateHourly((record) => ({ ...record, temperature: '22.5' })),
+      ],
+      [
+        'fractional hourly probability',
+        mutateHourly((record) => ({ ...record, precipitation_probability: 10.5 })),
+      ],
+      [
+        'out-of-range hourly probability',
+        mutateHourly((record) => ({ ...record, precipitation_probability: 101 })),
+      ],
+      [
+        'null daily temperature_max',
+        mutateDaily((record) => ({ ...record, temperature_max: null })),
+      ],
+      [
+        'out-of-range daily probability',
+        mutateDaily((record) => ({ ...record, precipitation_probability: 101 })),
+      ],
+      [
+        'malformed next_rain',
+        {
+          ...buildOverview(),
+          next_rain: {
+            start_time: '2023-11-14T13:00',
+          } as unknown as WeatherOverview['next_rain'],
+        },
+      ],
+    ];
+
+    it.each(invalidCases)('returns null for %s stored in the cache', async (_caseName, overview) => {
+      seedRecord({ overview });
+      expect(await loadWeatherCache(location)).toBeNull();
+    });
+  });
+
   it('allows AsyncStorage.getItem rejection to propagate', async () => {
     const failure = new Error('storage unavailable');
     mockAsyncStorage.getItem.mockRejectedValueOnce(failure);
 
     await expect(loadWeatherCache(location)).rejects.toThrow(failure);
+  });
+
+  it('delegates overview parsing to the shared WeatherOverview contract parser', async () => {
+    const validationModule = require('../../validation/weather');
+    const spy = jest.spyOn(validationModule, 'parseWeatherOverview');
+
+    const overview = buildOverview();
+    seedRecord({ overview });
+
+    const loaded = await loadWeatherCache(location);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.overview).toEqual(parseWeatherOverview(overview));
+    expect(loaded!.overview).not.toBe(overview);
+    spy.mockRestore();
   });
 });

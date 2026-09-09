@@ -1,5 +1,6 @@
 import { requestJson } from '../client';
 import { fetchWeatherOverview, searchLocations } from '../weather';
+import { parseWeatherOverview } from '../../validation/weather';
 
 jest.mock('../client', () => ({
   requestJson: jest.fn(),
@@ -177,6 +178,24 @@ describe('weather API contract', () => {
     await expect(
       fetchWeatherOverview({ name: 'İstanbul', latitude: 41, longitude: 29 })
     ).rejects.toThrow('Unexpected');
+  });
+
+  test('network overview uses the shared validation/weather contract parser', async () => {
+    mockedRequestJson.mockResolvedValue(overviewPayload);
+    const spy = jest.spyOn(
+      require('../../validation/weather'),
+      'parseWeatherOverview'
+    );
+
+    const overview = await fetchWeatherOverview({
+      name: 'İstanbul',
+      latitude: 41,
+      longitude: 29,
+    });
+
+    expect(spy).toHaveBeenCalledWith(overviewPayload);
+    expect(overview).toEqual(parseWeatherOverview(overviewPayload));
+    spy.mockRestore();
   });
 
   test('validates every location search result and coordinate range', async () => {

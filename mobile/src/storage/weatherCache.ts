@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { parseWeatherOverview } from '../validation/weather';
 import type { WeatherLocation, WeatherOverview } from '../types/weather';
 
 const WEATHER_CACHE_STORAGE_PREFIX = 'weather_tracker:weather_cache:v1';
@@ -28,13 +29,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isValidOverviewContainer(value: unknown): boolean {
-  if (!isPlainObject(value)) return false;
-  if (!isPlainObject(value.current)) return false;
-  if (!Array.isArray(value.hourly) || value.hourly.length !== 24) return false;
-  if (!Array.isArray(value.daily) || value.daily.length !== 7) return false;
-  if (value.next_rain !== null && !isPlainObject(value.next_rain)) return false;
-  return true;
+function isMatchingLocation(value: unknown, location: WeatherLocation): value is WeatherLocation {
+  return (
+    isPlainObject(value) &&
+    value.name === location.name &&
+    value.latitude === location.latitude &&
+    value.longitude === location.longitude
+  );
 }
 
 export async function loadWeatherCache(
@@ -52,25 +53,27 @@ export async function loadWeatherCache(
 
   if (!isPlainObject(parsed)) return null;
 
-  const record = parsed as Record<string, unknown>;
-  if (record.version !== 1) return null;
+  if (parsed.version !== 1) return null;
 
-  const cachedLocation = record.location;
-  if (
-    !isPlainObject(cachedLocation) ||
-    cachedLocation.name !== location.name ||
-    cachedLocation.latitude !== location.latitude ||
-    cachedLocation.longitude !== location.longitude
-  ) {
-    return null;
-  }
+  const cachedLocation = parsed.location;
+  if (!isMatchingLocation(cachedLocation, location)) return null;
 
-  const fetchedAt = record.fetchedAt;
+  const fetchedAt = parsed.fetchedAt;
   if (typeof fetchedAt !== 'number' || !Number.isFinite(fetchedAt) || fetchedAt < 0) {
     return null;
   }
 
-  if (!isValidOverviewContainer(record.overview)) return null;
+  let overview: WeatherOverview;
+  try {
+    overview = parseWeatherOverview(parsed.overview);
+  } catch {
+    return null;
+  }
 
-  return parsed as unknown as WeatherCacheRecord;
+  return {
+    version: 1,
+    location: { name: location.name, latitude: location.latitude, longitude: location.longitude },
+    fetchedAt,
+    overview,
+  };
 }
