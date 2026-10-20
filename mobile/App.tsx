@@ -15,6 +15,11 @@ import { useWeatherOverview } from './src/hooks/useWeatherOverview';
 import { isSameLocation } from './src/storage/locations';
 import type { LocationSearchResult, WeatherLocation } from './src/types/weather';
 
+function formatLastUpdate(fetchedAt: number | null): string {
+  if (fetchedAt === null) return '';
+  return ` (Son güncelleme: ${new Date(fetchedAt).toLocaleString('tr-TR')})`;
+}
+
 const WEATHER_LOCATIONS: WeatherLocation[] = [
   { name: 'Elazığ', latitude: 38.6743, longitude: 39.2232 },
   { name: 'İstanbul', latitude: 41.0082, longitude: 28.9784 },
@@ -156,12 +161,28 @@ export default function App() {
         <DailyForecast daily={overview.daily} />
       )}
 
-      <Text style={styles.status}>
-        {overviewStatus === 'ready'
-          ? 'Backend: Bağlı'
-          : overviewStatus === 'error'
-            ? 'Backend: Bağlantı Yok'
-            : 'Backend kontrol ediliyor...'}
+      <Text style={styles.status} accessibilityLiveRegion="polite">
+        {(() => {
+          const hasValidOverview = overviewStatus === 'ready' && overview !== null;
+
+          if (hasValidOverview && refreshStatus === 'idle') {
+            return 'Backend: Bağlı';
+          }
+
+          if (hasValidOverview && refreshStatus === 'loading') {
+            return `Bağlantı kontrol ediliyor...${formatLastUpdate(fetchedAt)}`;
+          }
+
+          if (hasValidOverview && refreshStatus === 'error') {
+            return `Backend: Bağlantı yok${formatLastUpdate(fetchedAt)}`;
+          }
+
+          if (overviewStatus === 'error') {
+            return 'Backend: Bağlantı Yok';
+          }
+
+          return 'Backend kontrol ediliyor...';
+        })()}
       </Text>
       <StatusBar style="auto" />
       </ScrollView>
