@@ -57,4 +57,49 @@ describe('HourlyForecast', () => {
     expect(queryByText('13:00')).toBeNull();
     expect(queryByText('14:00')).toBeNull();
   });
+
+  it('marks exactly the first card whose hour.time equals rainStartTime', async () => {
+    const { getByText } = await render(
+      <HourlyForecast hourly={hourly} rainStartTime="2024-06-01T14:00" />
+    );
+
+    const markedCard = getByText('14:00').parent;
+    expect(markedCard?.props.accessibilityLabel).toBe('Yağış başlangıcı: 14:00');
+    expect(markedCard?.props.accessible).toBe(true);
+
+    const unmarkedCard = getByText('13:00').parent;
+    expect(unmarkedCard?.props.accessible).toBe(false);
+    expect(unmarkedCard?.props.accessibilityLabel).toBe('');
+  });
+
+  it('preserves card dimensions 72x150 on the marked card', async () => {
+    const { getByText } = await render(
+      <HourlyForecast hourly={hourly} rainStartTime="2024-06-01T14:00" />
+    );
+    const markedCard = getByText('14:00').parent;
+
+    expect(markedCard).toBeTruthy();
+    expect(markedCard?.props.style).toEqual([
+      expect.objectContaining({ width: 72, height: 150 }),
+      expect.objectContaining({ borderWidth: 2 }),
+    ]);
+  });
+
+  it('does not mark any card when rainStartTime is null', async () => {
+    const { getByText } = await render(
+      <HourlyForecast hourly={hourly} rainStartTime={null} />
+    );
+
+    expect(getByText('13:00').parent?.props.accessibilityLabel).toBe('');
+    expect(getByText('14:00').parent?.props.accessibilityLabel).toBe('');
+  });
+
+  it('does not mark any card when rainStartTime does not match any hour.time', async () => {
+    const { getByText } = await render(
+      <HourlyForecast hourly={hourly} rainStartTime="2024-06-01T15:00" />
+    );
+
+    expect(getByText('13:00').parent?.props.accessibilityLabel).toBe('');
+    expect(getByText('14:00').parent?.props.accessibilityLabel).toBe('');
+  });
 });

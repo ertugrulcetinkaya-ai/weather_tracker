@@ -154,7 +154,10 @@ export default function App() {
       )}
 
       {overviewStatus === 'ready' && overview !== null && (
-        <HourlyForecast hourly={overview.hourly} />
+        <HourlyForecast
+          hourly={overview.hourly}
+          rainStartTime={overview.next_rain?.start_time ?? null}
+        />
       )}
 
       {overviewStatus === 'ready' && overview !== null && (
