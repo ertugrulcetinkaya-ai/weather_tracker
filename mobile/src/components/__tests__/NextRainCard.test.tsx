@@ -49,6 +49,19 @@ describe('NextRainCard', () => {
     expect(getByText('En yoğun: 08:35')).toBeTruthy();
   });
 
+  it('shows a positive trace amount instead of rounding it to zero', async () => {
+    const rainEvent: RainEvent = {
+      start_time: '2024-05-01T08:00',
+      end_time: '2024-05-01T09:00',
+      total_precipitation: 0.004,
+      peak_time: '2024-05-01T08:00',
+    };
+
+    const { getByText } = await render(<NextRainCard nextRain={rainEvent} />);
+
+    expect(getByText('Toplam <0.01 mm')).toBeTruthy();
+  });
+
   it('shows the no-rain message when nextRain is null', async () => {
     const { getByText, queryByText } = await render(
       <NextRainCard nextRain={null} />,

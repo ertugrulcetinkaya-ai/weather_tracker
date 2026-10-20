@@ -58,14 +58,14 @@ describe('HourlyForecast', () => {
     expect(queryByText('14:00')).toBeNull();
   });
 
-  it('marks exactly the first card whose hour.time equals rainStartTime', async () => {
+  it('marks the record for the interval beginning at rainStartTime', async () => {
     const { getByText } = await render(
-      <HourlyForecast hourly={hourly} rainStartTime="2024-06-01T14:00" />
+      <HourlyForecast hourly={hourly} rainStartTime="2024-06-01T13:00" />
     );
 
     const markedCard = getByText('14:00').parent;
     expect(markedCard?.props.accessibilityLabel).toBe(
-      'Yağış başlangıcı, saat 14:00, sıcaklık 20°C, yağış ihtimali %35, yağış miktarı 1.23 mm'
+      'Yağış başlangıcı saat 13:00; saatlik sıcaklık saati 14:00, sıcaklık 20°C; 13:00–14:00 aralığında yağış ihtimali %35, yağış miktarı 1.23 mm'
     );
     expect(markedCard?.props.accessible).toBe(true);
 
@@ -76,7 +76,7 @@ describe('HourlyForecast', () => {
 
   it('preserves card dimensions 72x150 on the marked card', async () => {
     const { getByText } = await render(
-      <HourlyForecast hourly={hourly} rainStartTime="2024-06-01T14:00" />
+      <HourlyForecast hourly={hourly} rainStartTime="2024-06-01T13:00" />
     );
     const markedCard = getByText('14:00').parent;
 
@@ -103,5 +103,29 @@ describe('HourlyForecast', () => {
 
     expect(getByText('13:00').parent?.props.accessibilityLabel).toBe('');
     expect(getByText('14:00').parent?.props.accessibilityLabel).toBe('');
+  });
+
+  it('matches the rain interval across midnight without using the device timezone', async () => {
+    const afterMidnight = [
+      ...hourly,
+      {
+        time: '2024-06-02T00:00',
+        temperature: 18.2,
+        precipitation: 0.2,
+        precipitation_probability: 15,
+        weather_code: 61,
+        wind_speed: 6.0,
+      },
+    ];
+    const { getByText } = await render(
+      <HourlyForecast hourly={afterMidnight} rainStartTime="2024-06-01T23:00" />
+    );
+
+    const markedCard = getByText('00:00').parent;
+    expect(markedCard?.props.accessible).toBe(true);
+    expect(markedCard?.props.accessibilityLabel).toContain(
+      'Yağış başlangıcı saat 23:00'
+    );
+    expect(markedCard?.props.accessibilityLabel).toContain('23:00–00:00');
   });
 });
