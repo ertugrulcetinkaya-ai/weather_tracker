@@ -1,3 +1,18 @@
+# 2026-10-20 CURRENT OVERRIDE — MAC STUDIO oMLX / 32K / EMULATOR-ONLY
+
+**Priority:** This section overrides any conflicting instructions in the legacy V3 developer-loop protocol below. See `docs/omlx-emulator-pilot.md` for the first-session runbook.
+
+- **Host/roles:** Run Codex orchestration and local Qwen implementation on the Mac Studio first. Use the existing oMLX Qwen server through the worker's configured local endpoint (discover and verify it; never guess the port or switch models silently). The prior MacBook + Tailscale/SSH + llama.cpp route is fallback only after measured local trouble.
+- **Do not equate remote configuration with a live test.** Before first delegated edit, verify model ID, worker connectivity, request/response streaming, and actual configured maximum context. Never print secrets, authentication headers, or environment files.
+- **Context:** Initial oMLX setting is 32K context. Keep each Qwen request comfortably below the verified context limit, with room for output; aim for at most 24K input+reserved-output tokens in the pilot. Include only relevant file excerpts and bounded validation errors; summarize/restart a new scoped task before context saturation. Codex's own chat window and local Qwen context are separate.
+- **Reasoning:** The legacy `enable_thinking=false` is NOT a mandatory default for this pilot. September experiments found medium-thinking potentially more efficient overall. Confirm which oMLX options the live worker supports, compare supported thinking modes on the same small task when feasible, and record timing, calls, tokens, corrections, quality and context use. No invented API flags or hardcoded old llama.cpp model IDs.
+- **Safety:** Qwen edits only in a disposable worktree, using an explicit allowed-files list. No edits to main worktree, commits, pushes, dependency upgrades, destructive git commands or credential reads by Qwen. Preserve all user changes; only Codex may transfer an accepted diff after validation.
+- **Devices:** ALL Weather Tracker app/device and visual-acceptance testing must use an **Android emulator only**. Never install, launch, inspect, reset or otherwise touch a physical Samsung/Android/iOS device. `adb` commands must explicitly target a verified `emulator-...` serial; ignore USB/physical targets. If no usable emulator exists, set one up locally if feasible, or report the untested emulator gate—never substitute a physical device.
+- **Mac Studio shared memory:** Measure memory pressure and swap before and during first combined Codex+oMLX+emulator run. 32K and KV quantization reduce some memory costs, but do not guarantee no memory pressure. Stop/escalate if sustained memory pressure or swap growth risks stability; only then consider the prior remote-Codex arrangement.
+- **Acceptance:** Baseline and targeted tests, diff-scope audit, and emulator smoke are distinct gates. Automated tests passing does not imply visual acceptance. No merge to `main` until a review of the pilot report.
+
+---
+
 # WEATHER TRACKER — SOL + LOCAL QWEN DEVELOPER LOOP PROTOKOLÜ v3
 
 Repository:
