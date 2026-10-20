@@ -38,7 +38,7 @@ export function HourlyForecast({
               accessible={isFirstRainStart}
               accessibilityLabel={
                 isFirstRainStart
-                  ? `Yağış başlangıcı: ${hour.time.slice(11, 16)}`
+                  ? `Yağış başlangıcı, saat ${hour.time.slice(11, 16)}, sıcaklık ${Math.round(hour.temperature)}°C, yağış ihtimali %${hour.precipitation_probability}, yağış miktarı ${formatPrecipitation(hour.precipitation)} mm`
                   : ''
               }
               accessibilityRole="text"

@@ -64,7 +64,9 @@ describe('HourlyForecast', () => {
     );
 
     const markedCard = getByText('14:00').parent;
-    expect(markedCard?.props.accessibilityLabel).toBe('Yağış başlangıcı: 14:00');
+    expect(markedCard?.props.accessibilityLabel).toBe(
+      'Yağış başlangıcı, saat 14:00, sıcaklık 20°C, yağış ihtimali %35, yağış miktarı 1.23 mm'
+    );
     expect(markedCard?.props.accessible).toBe(true);
 
     const unmarkedCard = getByText('13:00').parent;

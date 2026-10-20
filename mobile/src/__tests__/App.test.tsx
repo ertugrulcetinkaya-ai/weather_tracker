@@ -311,7 +311,7 @@ describe('App pull-to-refresh', () => {
     await waitFor(() => expect(getByText(`Backend: Bağlantı yok ${expectedLastUpdate}`)).toBeOnTheScreen());
     expect(getByText('21°')).toBeOnTheScreen();
     expect(getByText('14:00').parent?.props.accessibilityLabel).toBe(
-      'Yağış başlangıcı: 14:00'
+      'Yağış başlangıcı, saat 14:00, sıcaklık 19°C, yağış ihtimali %65, yağış miktarı 0.8 mm'
     );
   });
 });
