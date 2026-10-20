@@ -3,6 +3,8 @@ import { AppState, RefreshControl } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { fetchWeatherOverview } from '../api/weather';
+import { loadWeatherCache } from '../storage/weatherCache';
+import type { WeatherCacheRecord } from '../storage/weatherCache';
 import type { LocationGeocodedAddress, LocationPermissionResponse } from 'expo-location';
 import type { WeatherOverview } from '../types/weather';
 import App from '../../App';
@@ -58,6 +60,7 @@ async function emitAppStateChange(nextAppState: AppStateStatus) {
 }
 
 const mockedFetchWeatherOverview = jest.mocked(fetchWeatherOverview);
+const mockedLoadWeatherCache = jest.mocked(loadWeatherCache);
 const mockedHasServicesEnabled = jest.mocked(Location.hasServicesEnabledAsync);
 const mockedRequestPermission = jest.mocked(Location.requestForegroundPermissionsAsync);
 const mockedGetCurrentPosition = jest.mocked(Location.getCurrentPositionAsync);
@@ -65,10 +68,12 @@ const mockedReverseGeocode = jest.mocked(Location.reverseGeocodeAsync);
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>((res) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 const GRANTED: LocationPermissionResponse = {
@@ -125,6 +130,7 @@ beforeEach(() => {
   });
 
   mockedFetchWeatherOverview.mockResolvedValue(overview('Elazığ'));
+  mockedLoadWeatherCache.mockResolvedValue(null);
   mockedHasServicesEnabled.mockResolvedValue(true);
   mockedRequestPermission.mockResolvedValue(GRANTED);
   mockedGetCurrentPosition.mockResolvedValue({
@@ -186,7 +192,7 @@ describe('App pull-to-refresh', () => {
     const initial = deferred<WeatherOverview>();
     mockedFetchWeatherOverview.mockReturnValueOnce(initial.promise);
 
-    const { getByText, getByTestId } = await render(<App />);
+    const { getByText, getByTestId, queryByText } = await render(<App />);
 
     await act(async () => {
       initial.resolve(overview('Elazığ'));
@@ -203,13 +209,15 @@ describe('App pull-to-refresh', () => {
     });
 
     expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
-    expect(getByText('Backend: Bağlı')).toBeOnTheScreen();
+    expect(getByText(/Bağlantı kontrol ediliyor/)).toBeOnTheScreen();
+    expect(queryByText('Backend: Bağlı')).toBeNull();
 
     scrollView = getByTestId('weather-scroll-view');
     const refreshControl = scrollView.props.refreshControl;
     expect(refreshControl.type).toBe(RefreshControl);
     expect(refreshControl.props.refreshing).toBe(true);
-    expect(getByText('Backend: Bağlı')).toBeOnTheScreen();
+    expect(getByText(/Bağlantı kontrol ediliyor/)).toBeOnTheScreen();
+    expect(queryByText('Backend: Bağlı')).toBeNull();
     expect(getByText('21°')).toBeOnTheScreen();
 
     await act(async () => {
@@ -246,10 +254,43 @@ describe('App pull-to-refresh', () => {
     });
 
     expect(getByText('21°')).toBeOnTheScreen();
+    expect(getByText(/Backend: Bağlantı yok/)).toBeOnTheScreen();
 
     const refreshControl = getByTestId('weather-scroll-view').props.refreshControl;
     expect(refreshControl.type).toBe(RefreshControl);
     expect(refreshControl.props.refreshing).toBe(false);
+  });
+
+  it('shows restored cached weather without claiming a live backend connection', async () => {
+    const cachedRecord: WeatherCacheRecord = {
+      version: 1,
+      location: { name: 'Elazığ', latitude: 38.6743, longitude: 39.2232 },
+      fetchedAt: new Date('2026-09-04T12:00:00.000Z').getTime(),
+      overview: overview('Elazığ'),
+    };
+    const cacheLoad = deferred<WeatherCacheRecord | null>();
+    const initialFetch = deferred<WeatherOverview>();
+    mockedLoadWeatherCache.mockReturnValueOnce(cacheLoad.promise);
+    mockedFetchWeatherOverview.mockReturnValueOnce(initialFetch.promise);
+
+    const { getByText, queryByText } = await render(<App />);
+
+    await act(async () => {
+      cacheLoad.resolve(cachedRecord);
+    });
+
+    const expectedLastUpdate = `(Son güncelleme: ${new Date(cachedRecord.fetchedAt).toLocaleString('tr-TR')})`;
+
+    await waitFor(() => expect(getByText(`Bağlantı kontrol ediliyor... ${expectedLastUpdate}`)).toBeOnTheScreen());
+    expect(queryByText('Backend: Bağlı')).toBeNull();
+    expect(getByText('21°')).toBeOnTheScreen();
+
+    await act(async () => {
+      initialFetch.reject(new Error('offline'));
+    });
+
+    await waitFor(() => expect(getByText(`Backend: Bağlantı yok ${expectedLastUpdate}`)).toBeOnTheScreen());
+    expect(getByText('21°')).toBeOnTheScreen();
   });
 });
 
@@ -316,7 +357,7 @@ describe('App foreground auto-refresh', () => {
     const initial = deferred<WeatherOverview>();
     mockedFetchWeatherOverview.mockReturnValueOnce(initial.promise);
 
-    const { getByText } = await render(<App />);
+    const { getByText, queryByText } = await render(<App />);
 
     await act(async () => {
       initial.resolve(overview('Elazığ'));
@@ -338,7 +379,8 @@ describe('App foreground auto-refresh', () => {
 
     expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
     expect(getByText('21°')).toBeOnTheScreen();
-    expect(getByText('Backend: Bağlı')).toBeOnTheScreen();
+    expect(getByText(/Bağlantı kontrol ediliyor/)).toBeOnTheScreen();
+    expect(queryByText('Backend: Bağlı')).toBeNull();
 
     await act(async () => {
       pending.resolve(overview('Elazığ'));
