@@ -42,7 +42,8 @@ export function HourlyForecast({
         contentContainerStyle={styles.hourlyContent}
       >
         {hourly.map((hour, index) => {
-          const isFirstRainStart = index === firstRainStartIndex;
+          const isFirstRainStart =
+            index === firstRainStartIndex && hour.precipitation > 0;
           const rainStartLabel =
             isFirstRainStart && rainStartTime !== null
               ? [
@@ -75,6 +76,14 @@ export function HourlyForecast({
               accessibilityRole="text"
             >
               <Text style={styles.hourlyTime}>{hour.time.slice(11, 16)}</Text>
+              {isFirstRainStart && rainStartTime !== null && (
+                <View style={styles.hourlyRainStartMarker} testID="rain-start-marker">
+                  <Text style={styles.hourlyRainStartLabel}>Yağış başlar</Text>
+                  <Text style={styles.hourlyRainStartTime}>
+                    {formatHour(rainStartTime)}
+                  </Text>
+                </View>
+              )}
               <Text style={styles.hourlyEmoji}>
                 {getWeatherCondition(hour.weather_code).emoji}
               </Text>
@@ -128,11 +137,29 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#0ea5e9',
     backgroundColor: '#e0f2fe',
+    paddingHorizontal: 6,
   },
   hourlyTime: {
     fontSize: 11,
     color: '#777',
     marginBottom: 6,
+  },
+  hourlyRainStartMarker: {
+    alignItems: 'center',
+  },
+  hourlyRainStartLabel: {
+    maxWidth: 60,
+    fontSize: 8.5,
+    lineHeight: 10,
+    fontWeight: '600',
+    color: '#0369a1',
+    textAlign: 'center',
+  },
+  hourlyRainStartTime: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: 'bold',
+    color: '#0369a1',
   },
   hourlyEmoji: {
     fontSize: 22,

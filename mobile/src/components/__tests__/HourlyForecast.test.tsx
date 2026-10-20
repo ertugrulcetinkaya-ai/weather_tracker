@@ -59,7 +59,7 @@ describe('HourlyForecast', () => {
   });
 
   it('marks the record for the interval beginning at rainStartTime', async () => {
-    const { getByText } = await render(
+    const { getAllByText, getByText } = await render(
       <HourlyForecast hourly={hourly} rainStartTime="2024-06-01T13:00" />
     );
 
@@ -69,9 +69,45 @@ describe('HourlyForecast', () => {
     );
     expect(markedCard?.props.accessible).toBe(true);
 
-    const unmarkedCard = getByText('13:00').parent;
+    const unmarkedCard = getAllByText('13:00')[0].parent;
     expect(unmarkedCard?.props.accessible).toBe(false);
     expect(unmarkedCard?.props.accessibilityLabel).toBe('');
+  });
+
+  it('shows the 14:00 rain start on the 15:00 temperature card', async () => {
+    const hourAtFifteen = { ...hourly[1], time: '2024-06-01T15:00' };
+    const { getByText, getByTestId } = await render(
+      <HourlyForecast hourly={[hourAtFifteen]} rainStartTime="2024-06-01T14:00" />
+    );
+    const markedCard = getByText('15:00').parent;
+
+    expect(getByText('20°C')).toBeTruthy();
+    expect(getByText('Yağış başlar')).toBeTruthy();
+    expect(getByTestId('rain-start-marker')).toBeTruthy();
+    expect(getByText('14:00')).toBeTruthy();
+    expect(markedCard?.props.accessibilityLabel).toContain('14:00–15:00 aralığında');
+  });
+
+  it('shows the start marker for small positive precipitation', async () => {
+    const lightRainHour = { ...hourly[1], precipitation: 0.01 };
+    const { getByText, getByTestId } = await render(
+      <HourlyForecast hourly={[lightRainHour]} rainStartTime="2024-06-01T13:00" />
+    );
+
+    expect(getByText('0.01 mm')).toBeTruthy();
+    expect(getByTestId('rain-start-marker')).toBeTruthy();
+  });
+
+  it('does not show a rain start marker on a dry card', async () => {
+    const dryHour = { ...hourly[1], precipitation: 0 };
+    const { getByText, queryByTestId } = await render(
+      <HourlyForecast hourly={[dryHour]} rainStartTime="2024-06-01T13:00" />
+    );
+
+    const card = getByText('14:00').parent;
+    expect(queryByTestId('rain-start-marker')).toBeNull();
+    expect(card?.props.accessible).toBe(false);
+    expect(card?.props.accessibilityLabel).toBe('');
   });
 
   it('preserves card dimensions 72x150 on the marked card', async () => {
@@ -88,19 +124,21 @@ describe('HourlyForecast', () => {
   });
 
   it('does not mark any card when rainStartTime is null', async () => {
-    const { getByText } = await render(
+    const { getByText, queryByTestId } = await render(
       <HourlyForecast hourly={hourly} rainStartTime={null} />
     );
 
+    expect(queryByTestId('rain-start-marker')).toBeNull();
     expect(getByText('13:00').parent?.props.accessibilityLabel).toBe('');
     expect(getByText('14:00').parent?.props.accessibilityLabel).toBe('');
   });
 
   it('does not mark any card when rainStartTime does not match any hour.time', async () => {
-    const { getByText } = await render(
+    const { getByText, queryByTestId } = await render(
       <HourlyForecast hourly={hourly} rainStartTime="2024-06-01T15:00" />
     );
 
+    expect(queryByTestId('rain-start-marker')).toBeNull();
     expect(getByText('13:00').parent?.props.accessibilityLabel).toBe('');
     expect(getByText('14:00').parent?.props.accessibilityLabel).toBe('');
   });
@@ -117,7 +155,7 @@ describe('HourlyForecast', () => {
         wind_speed: 6.0,
       },
     ];
-    const { getByText } = await render(
+    const { getByText, getByTestId } = await render(
       <HourlyForecast hourly={afterMidnight} rainStartTime="2024-06-01T23:00" />
     );
 
@@ -126,6 +164,8 @@ describe('HourlyForecast', () => {
     expect(markedCard?.props.accessibilityLabel).toContain(
       'Yağış başlangıcı saat 23:00'
     );
+    expect(markedCard?.props.accessibilityLabel).toContain('saatlik sıcaklık saati 00:00');
     expect(markedCard?.props.accessibilityLabel).toContain('23:00–00:00');
+    expect(getByText('23:00')).toBeTruthy();
   });
 });
