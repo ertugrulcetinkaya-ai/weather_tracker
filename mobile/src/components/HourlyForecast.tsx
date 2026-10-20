@@ -5,9 +5,18 @@ import { formatPrecipitation } from '../weather/format';
 
 type HourlyForecastProps = {
   hourly: HourlyWeather[];
+  rainStartTime?: string | null;
 };
 
-export function HourlyForecast({ hourly }: HourlyForecastProps) {
+export function HourlyForecast({
+  hourly,
+  rainStartTime = null,
+}: HourlyForecastProps) {
+  const firstRainStartIndex =
+    rainStartTime === null
+      ? -1
+      : hourly.findIndex((candidate) => candidate.time === rainStartTime);
+
   return (
     <>
       <Text style={styles.hourlyTitle}>Saatlik Tahmin</Text>
@@ -17,23 +26,39 @@ export function HourlyForecast({ hourly }: HourlyForecastProps) {
         style={styles.hourlyScroll}
         contentContainerStyle={styles.hourlyContent}
       >
-        {hourly.map((hour) => (
-          <View key={hour.time} style={styles.hourlyCard}>
-            <Text style={styles.hourlyTime}>{hour.time.slice(11, 16)}</Text>
-            <Text style={styles.hourlyEmoji}>
-              {getWeatherCondition(hour.weather_code).emoji}
-            </Text>
-            <Text style={styles.hourlyTemperature}>
-              {Math.round(hour.temperature)}°C
-            </Text>
-            <Text style={styles.hourlyProbability}>
-              Yağış %{hour.precipitation_probability}
-            </Text>
-            <Text style={styles.hourlyPrecipitation}>
-              {formatPrecipitation(hour.precipitation)} mm
-            </Text>
-          </View>
-        ))}
+        {hourly.map((hour, index) => {
+          const isFirstRainStart = index === firstRainStartIndex;
+          return (
+            <View
+              key={hour.time}
+              style={[
+                styles.hourlyCard,
+                isFirstRainStart && styles.hourlyCardRainStart,
+              ]}
+              accessible={isFirstRainStart}
+              accessibilityLabel={
+                isFirstRainStart
+                  ? `Yağış başlangıcı, saat ${hour.time.slice(11, 16)}, sıcaklık ${Math.round(hour.temperature)}°C, yağış ihtimali %${hour.precipitation_probability}, yağış miktarı ${formatPrecipitation(hour.precipitation)} mm`
+                  : ''
+              }
+              accessibilityRole="text"
+            >
+              <Text style={styles.hourlyTime}>{hour.time.slice(11, 16)}</Text>
+              <Text style={styles.hourlyEmoji}>
+                {getWeatherCondition(hour.weather_code).emoji}
+              </Text>
+              <Text style={styles.hourlyTemperature}>
+                {Math.round(hour.temperature)}°C
+              </Text>
+              <Text style={styles.hourlyProbability}>
+                Yağış %{hour.precipitation_probability}
+              </Text>
+              <Text style={styles.hourlyPrecipitation}>
+                {formatPrecipitation(hour.precipitation)} mm
+              </Text>
+            </View>
+          );
+        })}
       </ScrollView>
     </>
   );
@@ -67,6 +92,11 @@ const styles = StyleSheet.create({
     padding: 10,
     alignItems: 'center',
     marginRight: 8,
+  },
+  hourlyCardRainStart: {
+    borderWidth: 2,
+    borderColor: '#0ea5e9',
+    backgroundColor: '#e0f2fe',
   },
   hourlyTime: {
     fontSize: 11,

@@ -262,11 +262,30 @@ describe('App pull-to-refresh', () => {
   });
 
   it('shows restored cached weather without claiming a live backend connection', async () => {
+    const cachedOverview: WeatherOverview = {
+      ...overview('Elazığ'),
+      hourly: [
+        {
+          time: '2026-09-04T14:00',
+          temperature: 19,
+          precipitation: 0.8,
+          precipitation_probability: 65,
+          weather_code: 61,
+          wind_speed: 8,
+        },
+      ],
+      next_rain: {
+        start_time: '2026-09-04T14:00',
+        end_time: '2026-09-04T16:00',
+        total_precipitation: 2,
+        peak_time: '2026-09-04T15:00',
+      },
+    };
     const cachedRecord: WeatherCacheRecord = {
       version: 1,
       location: { name: 'Elazığ', latitude: 38.6743, longitude: 39.2232 },
       fetchedAt: new Date('2026-09-04T12:00:00.000Z').getTime(),
-      overview: overview('Elazığ'),
+      overview: cachedOverview,
     };
     const cacheLoad = deferred<WeatherCacheRecord | null>();
     const initialFetch = deferred<WeatherOverview>();
@@ -291,6 +310,9 @@ describe('App pull-to-refresh', () => {
 
     await waitFor(() => expect(getByText(`Backend: Bağlantı yok ${expectedLastUpdate}`)).toBeOnTheScreen());
     expect(getByText('21°')).toBeOnTheScreen();
+    expect(getByText('14:00').parent?.props.accessibilityLabel).toBe(
+      'Yağış başlangıcı, saat 14:00, sıcaklık 19°C, yağış ihtimali %65, yağış miktarı 0.8 mm'
+    );
   });
 });
 
