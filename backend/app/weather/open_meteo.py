@@ -350,6 +350,7 @@ def _fetch_forecast_payload(
     latitude: float,
     longitude: float,
     daily_fields: tuple[str, ...] | None = None,
+    forecast_hours: int = FORECAST_HOURS,
 ) -> ForecastPayload:
     """Fetch one forecast request and validate every consumed value at the boundary."""
 
@@ -359,7 +360,7 @@ def _fetch_forecast_payload(
         "hourly": ",".join(hourly_fields),
         "timezone": "auto",
         "forecast_days": FORECAST_DAYS,
-        "forecast_hours": FORECAST_HOURS,
+        "forecast_hours": forecast_hours,
         "wind_speed_unit": "kmh",
     }
     if daily_fields is not None:
@@ -414,9 +415,10 @@ def _build_current_weather(
     *,
     location: str,
     timezone: ZoneInfo,
+    target_time: str | None = None,
 ) -> CurrentWeather:
-    now = datetime.now(timezone)
-    target_time = now.strftime("%Y-%m-%dT%H:00")
+    if target_time is None:
+        target_time = datetime.now(timezone).strftime("%Y-%m-%dT%H:00")
     index = _select_hour_index(times, target_time)
     time = times[index]
 
@@ -456,17 +458,19 @@ def _build_hourly_weather(
 def _select_hourly_window(
     payload: ForecastPayload,
     *,
-    start_time: str,
+    start_index: int,
 ) -> tuple[list[str], dict[str, list[Any]]]:
-    start = _select_hour_index(payload.times, start_time)
-    end = start + FORECAST_HOURS
+    end = start_index + FORECAST_HOURS
     if len(payload.times) < end:
         raise WeatherFetchError(
             f"Open-Meteo response must contain {FORECAST_HOURS} forecast hours"
         )
     return (
-        payload.times[start:end],
-        {field: values[start:end] for field, values in payload.hourly.items()},
+        payload.times[start_index:end],
+        {
+            field: values[start_index:end]
+            for field, values in payload.hourly.items()
+        },
     )
 
 
@@ -541,24 +545,31 @@ def get_weather_overview(
         latitude=latitude,
         longitude=longitude,
         daily_fields=DAILY_FIELDS,
+        forecast_hours=FORECAST_HOURS + 1,
     )
-    start_time = datetime.now(payload.timezone).strftime("%Y-%m-%dT%H:00")
-    times, hourly_payload = _select_hourly_window(payload, start_time=start_time)
+    now = datetime.now(payload.timezone)
+    current_time = now.strftime("%Y-%m-%dT%H:00")
+    current_index = _select_hour_index(payload.times, current_time)
+    times, hourly_payload = _select_hourly_window(
+        payload,
+        start_index=current_index + 1,
+    )
     current = _build_current_weather(
-        times,
-        hourly_payload,
+        payload.times,
+        payload.hourly,
         location=location,
         timezone=payload.timezone,
+        target_time=current_time,
     )
     hourly = _build_hourly_weather(times, hourly_payload)
     daily = _build_daily_forecast(payload.dates, payload.require_daily())
     events = find_rain_events(hourly)
-    now = datetime.now(payload.timezone).strftime("%Y-%m-%dT%H:%M")
+    now_time = now.strftime("%Y-%m-%dT%H:%M")
     return WeatherOverview(
         current=current,
         hourly=hourly,
         daily=daily,
-        next_rain=find_next_rain_event(events, now),
+        next_rain=find_next_rain_event(events, now_time),
     )
 
 
