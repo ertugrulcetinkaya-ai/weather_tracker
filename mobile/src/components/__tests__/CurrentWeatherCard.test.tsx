@@ -16,10 +16,10 @@ const current: CurrentWeather = {
 };
 
 describe('CurrentWeatherCard', () => {
-  it('shows location uppercased', async () => {
+  it('shows the city name once as readable card text', async () => {
     const { getByText } = await render(<CurrentWeatherCard current={current} />);
 
-    expect(getByText('KADIKÖY, İSTANBUL')).toBeTruthy();
+    expect(getByText('Kadıköy, İstanbul')).toBeTruthy();
   });
 
   it('shows the rounded temperature with a degree sign', async () => {
@@ -42,6 +42,14 @@ describe('CurrentWeatherCard', () => {
     expect(getByText('%63')).toBeTruthy();
   });
 
+  it('keeps fractional humidity values intact', async () => {
+    const { getByText } = await render(
+      <CurrentWeatherCard current={{ ...current, humidity: 63.5 }} />,
+    );
+
+    expect(getByText('%63.5')).toBeTruthy();
+  });
+
   it('shows wind speed with the km/h unit', async () => {
     const { getByText } = await render(<CurrentWeatherCard current={current} />);
 
@@ -57,11 +65,13 @@ describe('CurrentWeatherCard', () => {
     expect(getByText('7.2 km/h')).toBeTruthy();
   });
 
-  it('shows the condition label and emoji for the weather code', async () => {
-    const { getByText } = await render(<CurrentWeatherCard current={current} />);
+  it('shows the condition label and hides decorative weather artwork from accessibility', async () => {
+    const { getByTestId, getByText } = await render(<CurrentWeatherCard current={current} />);
 
     expect(getByText('Yağmurlu')).toBeTruthy();
-    expect(getByText('🌧️')).toBeTruthy();
+    const artwork = getByTestId('weather-artwork-rainy', { includeHiddenElements: true });
+    expect(artwork.props.accessible).toBe(false);
+    expect(artwork.props.importantForAccessibility).toBe('no-hide-descendants');
   });
 
   it('shows the formatted update time derived from current.time', async () => {
@@ -76,7 +86,7 @@ describe('CurrentWeatherCard', () => {
         <CurrentWeatherCard current={current} fetchedAt={null} />,
       );
 
-      expect(queryByText(/^Son güncelleme: /)).toBeNull();
+      expect(queryByText(/^Güncellendi · /)).toBeNull();
     });
 
     it('renders no last-updated label when fetchedAt is absent (backwards compatible)', async () => {
@@ -84,7 +94,7 @@ describe('CurrentWeatherCard', () => {
         <CurrentWeatherCard current={current} />,
       );
 
-      expect(queryByText(/^Son güncelleme: /)).toBeNull();
+      expect(queryByText(/^Güncellendi · /)).toBeNull();
     });
 
     it('renders a Turkish last-updated label with HH:MM derived from fetchedAt', async () => {
@@ -101,7 +111,7 @@ describe('CurrentWeatherCard', () => {
         <CurrentWeatherCard current={current} fetchedAt={timestamp} />,
       );
 
-      expect(getByText(`Son güncelleme: ${expectedTime}`)).toBeTruthy();
+      expect(getByText(`Güncellendi · ${expectedTime}`)).toBeTruthy();
     });
 
     it('rerenders with a new fetchedAt value', async () => {
@@ -113,7 +123,7 @@ describe('CurrentWeatherCard', () => {
       );
 
       expect(
-        getByText(`Son güncelleme: ${formatTime(first)}`),
+        getByText(`Güncellendi · ${formatTime(first)}`),
       ).toBeTruthy();
 
       await act(async () => {
@@ -121,7 +131,7 @@ describe('CurrentWeatherCard', () => {
       });
 
       expect(
-        getByText(`Son güncelleme: ${formatTime(second)}`),
+        getByText(`Güncellendi · ${formatTime(second)}`),
       ).toBeTruthy();
     });
   });

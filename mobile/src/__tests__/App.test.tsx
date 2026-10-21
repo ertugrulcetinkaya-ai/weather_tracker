@@ -150,8 +150,15 @@ beforeEach(() => {
 });
 
 describe('App device location wiring', () => {
+  it('keeps the collapsed city selector generic and displays the city in the hero', async () => {
+    const { getAllByText, getByRole } = await render(<App />);
+
+    await waitFor(() => expect(getByRole('button', { name: 'Şehir seç' })).toBeOnTheScreen());
+    expect(getAllByText('Elazığ')).toHaveLength(1);
+  });
+
   it('feeds a user-initiated GPS fix into the existing weather pipeline', async () => {
-    const { getByText } = await render(<App />);
+    const { getByLabelText, getByText } = await render(<App />);
 
     await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
     expect(mockedFetchWeatherOverview).toHaveBeenCalledWith(
@@ -160,7 +167,7 @@ describe('App device location wiring', () => {
     );
 
     mockedFetchWeatherOverview.mockResolvedValue(overview('Ankara'));
-    await fireEvent.press(getByText('📍 Mevcut konumum'));
+    await fireEvent.press(getByLabelText('Mevcut konumumu kullan'));
 
     await waitFor(() =>
       expect(mockedFetchWeatherOverview).toHaveBeenCalledWith(
