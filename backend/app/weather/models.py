@@ -55,6 +55,7 @@ class RainEvent(ApiModel):
 
 
 class WeatherOverview(ApiModel):
+    timezone: str
     current: CurrentWeather
     hourly: list[HourlyWeather]
     daily: list[DailyWeather]

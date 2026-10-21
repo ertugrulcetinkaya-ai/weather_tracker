@@ -35,6 +35,7 @@ const daily = [
 }));
 
 const overviewPayload = {
+  timezone: 'Europe/Istanbul',
   current: {
     location: 'İstanbul',
     temperature: 24.5,
@@ -117,6 +118,8 @@ describe('weather API contract', () => {
       { ...overviewPayload, hourly: [...hourly, { ...hourly[0] }] },
     ],
     ['missing daily forecast', { ...overviewPayload, daily: [] }],
+    ['missing timezone', { ...overviewPayload, timezone: undefined }],
+    ['empty timezone', { ...overviewPayload, timezone: ' ' }],
     [
       'shorter daily forecast',
       { ...overviewPayload, daily: daily.slice(0, 6) },

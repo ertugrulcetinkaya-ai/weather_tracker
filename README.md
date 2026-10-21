@@ -68,3 +68,7 @@ GitHub Actions runs the same lint, test, and type-check gates for pull requests 
 All weather endpoints accept `latitude` and `longitude` together. Endpoints that render a place
 name also accept `location`. Invalid input returns `422`; provider/network/shape failures return
 a consistent `502` response.
+
+`/weather/overview` includes the provider-resolved IANA `timezone`. Its weather and rain-event
+timestamps are local wall-clock values in that zone; clients should use the field when calculating
+time remaining or describing event times.

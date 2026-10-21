@@ -99,6 +99,7 @@ def test_overview_builds_screen_with_one_upstream_request():
     }
 
     data = response.json()
+    assert data["timezone"] == "Europe/Istanbul"
     assert data["current"] == {
         "location": "İstanbul",
         "temperature": 28.4,
@@ -164,6 +165,7 @@ def test_overview_uses_new_york_timezone_for_current_hour_and_window():
     assert response.status_code == 200
     assert mocked_get.call_count == 1
     data = response.json()
+    assert data["timezone"] == "America/New_York"
     assert data["current"]["time"] == "2026-08-24T08:00"
     assert data["current"]["temperature"] == 11.5
     assert len(data["hourly"]) == 24
@@ -235,6 +237,19 @@ def test_overview_maps_upstream_http_failure_to_bad_gateway():
 
     assert response.status_code == 502
     assert "Open-Meteo request failed" in response.json()["detail"]
+
+
+def test_overview_rejects_missing_provider_timezone_without_assuming_one():
+    payload = _overview_payload()
+    payload.pop("timezone")
+    with mock.patch(
+        "app.weather.open_meteo.httpx.get",
+        return_value=_mock_response(payload),
+    ):
+        response = client.get("/weather/overview")
+
+    assert response.status_code == 502
+    assert "timezone" in response.json()["detail"]
 
 
 def test_current_maps_invalid_provider_json_to_bad_gateway():

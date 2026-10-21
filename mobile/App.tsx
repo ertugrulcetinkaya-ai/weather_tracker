@@ -150,7 +150,11 @@ export default function App() {
       )}
 
       {overviewStatus === 'ready' && overview !== null && (
-        <NextRainCard nextRain={overview.next_rain} />
+        <NextRainCard
+          nextRain={overview.next_rain}
+          timezone={overview.timezone ?? ''}
+          forecastCurrent={refreshStatus === 'idle' && fetchedAt !== null}
+        />
       )}
 
       {overviewStatus === 'ready' && overview !== null && (

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadWeatherCache, saveWeatherCache } from '../weatherCache';
-import { parseWeatherOverview } from '../../validation/weather';
+import { parseCachedWeatherOverview } from '../../validation/weather';
 import type { WeatherLocation, WeatherOverview } from '../../types/weather';
 
 jest.mock('@react-native-async-storage/async-storage', () => {
@@ -36,6 +36,7 @@ describe('saveWeatherCache', () => {
   };
 
   const overview: WeatherOverview = {
+    timezone: 'Europe/Istanbul',
     current: {
       location: 'Ankara',
       temperature: 22.5,
@@ -68,7 +69,7 @@ describe('saveWeatherCache', () => {
     next_rain: null,
   };
 
-  it('persists exact JSON record with deterministic fetchedAt, version 1, location, and overview', async () => {
+  it('persists exact JSON record with deterministic fetchedAt, version 2, location, and overview', async () => {
     const fetchedAt = 1700000000000;
     await saveWeatherCache(location, overview, fetchedAt);
 
@@ -77,7 +78,7 @@ describe('saveWeatherCache', () => {
 
     const parsed = JSON.parse(value);
     expect(parsed).toEqual({
-      version: 1,
+      version: 2,
       fetchedAt,
       location,
       overview,
@@ -151,6 +152,7 @@ describe('loadWeatherCache', () => {
 
   function buildOverview(): WeatherOverview {
     return {
+      timezone: 'Europe/Istanbul',
       current: {
         location: 'Ankara',
         temperature: 22.5,
@@ -182,7 +184,7 @@ describe('loadWeatherCache', () => {
 
   function seedRecord(overrides?: Partial<Record<string, unknown>>): void {
     const record = {
-      version: 1,
+      version: 2,
       location,
       fetchedAt: 1700000000000,
       overview: buildOverview(),
@@ -191,7 +193,7 @@ describe('loadWeatherCache', () => {
     // Write directly through the mocked store using saveWeatherCache's key derivation
     // by invoking setItem with a matching key. We reconstruct the key here to seed
     // arbitrary payloads without going through saveWeatherCache.
-    const prefix = 'weather_tracker:weather_cache:v1';
+    const prefix = 'weather_tracker:weather_cache:v2';
     const key = `${prefix}:${encodeURIComponent(location.name)}:${location.latitude}:${location.longitude}`;
     mockAsyncStorage.setItem(key, JSON.stringify(record));
   }
@@ -202,7 +204,7 @@ describe('loadWeatherCache', () => {
 
     const loaded = await loadWeatherCache(location);
     expect(loaded).not.toBeNull();
-    expect(loaded!.version).toBe(1);
+    expect(loaded!.version).toBe(2);
     expect(loaded!.fetchedAt).toBe(fetchedAt);
     expect(loaded!.location).toEqual(location);
     expect(loaded!.overview).toEqual(buildOverview());
@@ -213,8 +215,28 @@ describe('loadWeatherCache', () => {
     expect(loaded).toBeNull();
   });
 
+  it('keeps a legacy cached forecast while marking its timezone unknown', async () => {
+    const oldKey = `weather_tracker:weather_cache:v1:${encodeURIComponent(location.name)}:${location.latitude}:${location.longitude}`;
+    const oldOverview = { ...buildOverview() } as Record<string, unknown>;
+    delete oldOverview.timezone;
+    await mockAsyncStorage.setItem(
+      oldKey,
+      JSON.stringify({
+        version: 1,
+        location,
+        fetchedAt: 1700000000000,
+        overview: oldOverview,
+      }),
+    );
+
+    const loaded = await loadWeatherCache(location);
+    expect(loaded).not.toBeNull();
+    expect(loaded?.version).toBe(1);
+    expect(loaded?.overview.timezone).toBeNull();
+  });
+
   it('returns null for malformed JSON', async () => {
-    const prefix = 'weather_tracker:weather_cache:v1';
+    const prefix = 'weather_tracker:weather_cache:v2';
     const key = `${prefix}:${encodeURIComponent(location.name)}:${location.latitude}:${location.longitude}`;
     mockAsyncStorage.setItem(key, '{not valid json');
 
@@ -222,8 +244,8 @@ describe('loadWeatherCache', () => {
     expect(loaded).toBeNull();
   });
 
-  it('returns null when version is not exactly 1', async () => {
-    seedRecord({ version: 2 });
+  it('returns null when version is not exactly 2', async () => {
+    seedRecord({ version: 3 });
     const loaded = await loadWeatherCache(location);
     expect(loaded).toBeNull();
   });
@@ -295,7 +317,7 @@ describe('loadWeatherCache', () => {
 
     const loaded = await loadWeatherCache(location);
     expect(loaded).not.toBeNull();
-    expect(loaded!.version).toBe(1);
+    expect(loaded!.version).toBe(2);
     expect(loaded!.fetchedAt).toBe(fetchedAt);
     expect(loaded!.location).toEqual(location);
     expect(loaded!.overview.hourly).toHaveLength(24);
@@ -381,7 +403,7 @@ describe('loadWeatherCache', () => {
 
   it('delegates overview parsing to the shared WeatherOverview contract parser', async () => {
     const validationModule = require('../../validation/weather');
-    const spy = jest.spyOn(validationModule, 'parseWeatherOverview');
+    const spy = jest.spyOn(validationModule, 'parseCachedWeatherOverview');
 
     const overview = buildOverview();
     seedRecord({ overview });
@@ -390,7 +412,7 @@ describe('loadWeatherCache', () => {
 
     expect(spy).toHaveBeenCalledTimes(1);
     expect(loaded).not.toBeNull();
-    expect(loaded!.overview).toEqual(parseWeatherOverview(overview));
+    expect(loaded!.overview).toEqual(parseCachedWeatherOverview(overview));
     expect(loaded!.overview).not.toBe(overview);
     spy.mockRestore();
   });

@@ -1,19 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { parseWeatherOverview } from '../validation/weather';
+import { parseCachedWeatherOverview } from '../validation/weather';
 import type { WeatherLocation, WeatherOverview } from '../types/weather';
 
-const WEATHER_CACHE_STORAGE_PREFIX = 'weather_tracker:weather_cache:v1';
+const WEATHER_CACHE_STORAGE_PREFIX = 'weather_tracker:weather_cache:v2';
 
 export type WeatherCacheRecord = {
-  version: 1;
+  version: 1 | 2;
   location: WeatherLocation;
   fetchedAt: number;
   overview: WeatherOverview;
 };
 
-function buildWeatherCacheKey(location: WeatherLocation): string {
-  return `${WEATHER_CACHE_STORAGE_PREFIX}:${encodeURIComponent(location.name)}:${location.latitude}:${location.longitude}`;
+function buildWeatherCacheKey(location: WeatherLocation, version = 2): string {
+  const prefix =
+    version === 1 ? 'weather_tracker:weather_cache:v1' : WEATHER_CACHE_STORAGE_PREFIX;
+  return `${prefix}:${encodeURIComponent(location.name)}:${location.latitude}:${location.longitude}`;
 }
 
 export async function saveWeatherCache(
@@ -21,7 +23,7 @@ export async function saveWeatherCache(
   overview: WeatherOverview,
   fetchedAt: number = Date.now(),
 ): Promise<void> {
-  const record: WeatherCacheRecord = { version: 1, location, fetchedAt, overview };
+  const record: WeatherCacheRecord = { version: 2, location, fetchedAt, overview };
   await AsyncStorage.setItem(buildWeatherCacheKey(location), JSON.stringify(record));
 }
 
@@ -41,7 +43,9 @@ function isMatchingLocation(value: unknown, location: WeatherLocation): value is
 export async function loadWeatherCache(
   location: WeatherLocation,
 ): Promise<WeatherCacheRecord | null> {
-  const raw = await AsyncStorage.getItem(buildWeatherCacheKey(location));
+  const currentRaw = await AsyncStorage.getItem(buildWeatherCacheKey(location));
+  const version = currentRaw === null ? 1 : 2;
+  const raw = currentRaw ?? await AsyncStorage.getItem(buildWeatherCacheKey(location, 1));
   if (raw === null) return null;
 
   let parsed: unknown;
@@ -53,7 +57,7 @@ export async function loadWeatherCache(
 
   if (!isPlainObject(parsed)) return null;
 
-  if (parsed.version !== 1) return null;
+  if (parsed.version !== version) return null;
 
   const cachedLocation = parsed.location;
   if (!isMatchingLocation(cachedLocation, location)) return null;
@@ -65,13 +69,13 @@ export async function loadWeatherCache(
 
   let overview: WeatherOverview;
   try {
-    overview = parseWeatherOverview(parsed.overview);
+    overview = parseCachedWeatherOverview(parsed.overview);
   } catch {
     return null;
   }
 
   return {
-    version: 1,
+    version,
     location: { name: location.name, latitude: location.latitude, longitude: location.longitude },
     fetchedAt,
     overview,

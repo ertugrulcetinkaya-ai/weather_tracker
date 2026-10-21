@@ -40,6 +40,7 @@ export type RainEvent = {
 };
 
 export type WeatherOverview = {
+  timezone: string | null;
   current: CurrentWeather;
   hourly: HourlyWeather[];
   daily: DailyWeather[];
