@@ -566,6 +566,7 @@ def get_weather_overview(
     events = find_rain_events(hourly)
     now_time = now.strftime("%Y-%m-%dT%H:%M")
     return WeatherOverview(
+        timezone=payload.timezone.key,
         current=current,
         hourly=hourly,
         daily=daily,

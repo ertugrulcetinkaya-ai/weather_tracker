@@ -22,6 +22,7 @@ const ANKARA: WeatherLocation = { name: 'Ankara', latitude: 39.9334, longitude: 
 
 function overview(location: WeatherLocation, temperature = 24): WeatherOverview {
   return {
+    timezone: 'Europe/Istanbul',
     current: {
       location: location.name,
       temperature,
@@ -66,7 +67,7 @@ function deferred<T>() {
 }
 
 function cacheRecord(location: WeatherLocation, temperature = 18) {
-  return { version: 1 as const, location, fetchedAt: 1, overview: overview(location, temperature) };
+  return { version: 2 as const, location, fetchedAt: 1, overview: overview(location, temperature) };
 }
 
 const realNow = Date.now;

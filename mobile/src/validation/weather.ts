@@ -110,9 +110,15 @@ function parseRainEvent(value: unknown): RainEvent {
   };
 }
 
-export function parseWeatherOverview(value: unknown): WeatherOverview {
+function parseWeatherOverviewValue(
+  value: unknown,
+  allowMissingTimezone: boolean,
+): WeatherOverview {
+  const timezone = isRecord(value) ? value.timezone : undefined;
   if (
     !isRecord(value) ||
+    (typeof timezone !== 'string' && !(allowMissingTimezone && timezone === undefined)) ||
+    (typeof timezone === 'string' && timezone.trim() === '') ||
     !Array.isArray(value.hourly) ||
     value.hourly.length !== HOURLY_RECORD_COUNT ||
     !Array.isArray(value.daily) ||
@@ -124,9 +130,18 @@ export function parseWeatherOverview(value: unknown): WeatherOverview {
   const daily = value.daily;
   const nextRain = value.next_rain;
   return {
+    timezone: typeof timezone === 'string' ? timezone : null,
     current: parseCurrentWeather(value.current),
     hourly: hourly.map(parseHourlyWeather),
     daily: daily.map(parseDailyWeather),
     next_rain: nextRain === null ? null : parseRainEvent(nextRain),
   };
+}
+
+export function parseWeatherOverview(value: unknown): WeatherOverview {
+  return parseWeatherOverviewValue(value, false);
+}
+
+export function parseCachedWeatherOverview(value: unknown): WeatherOverview {
+  return parseWeatherOverviewValue(value, true);
 }

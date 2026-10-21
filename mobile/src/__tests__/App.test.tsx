@@ -100,6 +100,7 @@ const ANKARA_ADDRESS: LocationGeocodedAddress = {
 
 function overview(location: string): WeatherOverview {
   return {
+    timezone: 'Europe/Istanbul',
     current: {
       location,
       temperature: 21,
@@ -264,6 +265,7 @@ describe('App pull-to-refresh', () => {
   it('shows restored cached weather without claiming a live backend connection', async () => {
     const cachedOverview: WeatherOverview = {
       ...overview('Elazığ'),
+      timezone: null,
       hourly: [
         {
           time: '2026-09-04T15:00',
@@ -310,6 +312,8 @@ describe('App pull-to-refresh', () => {
 
     await waitFor(() => expect(getByText(`Backend: Bağlantı yok ${expectedLastUpdate}`)).toBeOnTheScreen());
     expect(getByText('21°')).toBeOnTheScreen();
+    expect(getByText('Tahmin güncel değil. Geri sayım gösterilmiyor.')).toBeOnTheScreen();
+    expect(queryByText(/Başlamasına .* kaldı/)).toBeNull();
     expect(getByText('15:00').parent?.props.accessibilityLabel).toBe(
       'Yağış başlangıcı saat 14:00; saatlik sıcaklık saati 15:00, sıcaklık 19°C; 14:00–15:00 aralığında yağış ihtimali %65, yağış miktarı 0.8 mm'
     );
