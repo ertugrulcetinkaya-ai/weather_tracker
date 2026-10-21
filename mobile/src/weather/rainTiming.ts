@@ -116,25 +116,22 @@ export function getRainTiming(
 ): RainTiming {
   const starts = wallTimeToEpochCandidates(event.start_time, timezone);
   const ends = wallTimeToEpochCandidates(event.end_time, timezone);
-  const ranges = starts.flatMap((start) =>
-    ends
-      .filter((end) => end > start)
-      .map((end) => ({ start, end })),
-  );
-  if (ranges.length === 0) return { status: 'unavailable' };
+  if (starts.length !== 1 || ends.length !== 1) {
+    return { status: 'unavailable' };
+  }
 
-  const active = ranges
-    .filter(({ start, end }) => nowMilliseconds >= start && nowMilliseconds < end)
-    .sort((left, right) => right.start - left.start)[0];
-  if (active !== undefined) return { status: 'ongoing' };
+  const [start] = starts;
+  const [end] = ends;
+  if (end <= start) return { status: 'unavailable' };
 
-  const upcoming = ranges
-    .filter(({ start }) => start > nowMilliseconds)
-    .sort((left, right) => left.start - right.start)[0];
-  if (upcoming !== undefined) {
+  if (nowMilliseconds >= start && nowMilliseconds < end) {
+    return { status: 'ongoing' };
+  }
+
+  if (start > nowMilliseconds) {
     return {
       status: 'future',
-      millisecondsUntilStart: upcoming.start - nowMilliseconds,
+      millisecondsUntilStart: start - nowMilliseconds,
     };
   }
   return { status: 'ended' };

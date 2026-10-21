@@ -56,6 +56,50 @@ describe('NextRainCard', () => {
     expect(getByText('Başlamasına 1 saat kaldı.')).toBeTruthy();
   });
 
+  it.each([
+    [
+      'the repeated fall-back start time',
+      '2026-11-01T01:30',
+      '2026-11-01T02:30',
+      '2026-11-01T04:00:00.000Z',
+    ],
+    [
+      'the repeated fall-back end time',
+      '2026-11-01T00:30',
+      '2026-11-01T01:30',
+      '2026-11-01T04:00:00.000Z',
+    ],
+    [
+      'the skipped spring-forward time',
+      '2026-03-08T02:30',
+      '2026-03-08T03:30',
+      '2026-03-08T06:00:00.000Z',
+    ],
+    [
+      'an invalid local time',
+      '2026-08-24T25:30',
+      '2026-08-24T26:00',
+      '2026-08-24T14:00:00.000Z',
+    ],
+  ])('does not claim an exact time for %s', async (_scenario, start_time, end_time, now) => {
+    jest.setSystemTime(new Date(now));
+    const ambiguousRain = { ...rainEvent, start_time, end_time };
+    const { getByText, getByLabelText, queryByText } = await render(
+      <NextRainCard
+        nextRain={ambiguousRain}
+        timezone="America/New_York"
+        forecastCurrent
+      />,
+    );
+
+    expect(getByText('Yağış zamanı kesin olarak hesaplanamıyor.')).toBeTruthy();
+    expect(
+      getByLabelText(/Yağış zamanı kesin olarak hesaplanamıyor/),
+    ).toBeTruthy();
+    expect(queryByText(/Başlamasına .* kaldı/)).toBeNull();
+    expect(queryByText('Yağış devam ediyor.')).toBeNull();
+  });
+
   it('updates the visible remaining time once per minute', async () => {
     jest.setSystemTime(new Date('2026-08-24T14:30:00.000Z'));
     let onAppStateChange: ((state: string) => void) | undefined;
@@ -101,6 +145,20 @@ describe('NextRainCard', () => {
 
     expect(getByText('Yağış devam ediyor.')).toBeTruthy();
     expect(getByLabelText(/Yağış devam ediyor/)).toBeTruthy();
+  });
+
+  it('shows that rain has ended when now is after its end', async () => {
+    jest.setSystemTime(new Date('2026-08-24T16:30:00.000Z'));
+    const { getByText, getByLabelText } = await render(
+      <NextRainCard
+        nextRain={rainEvent}
+        timezone="Europe/Istanbul"
+        forecastCurrent
+      />,
+    );
+
+    expect(getByText('Bu yağış sona erdi.')).toBeTruthy();
+    expect(getByLabelText(/Bu yağış sona erdi/)).toBeTruthy();
   });
 
   it('does not show a countdown for an offline cached forecast without a timezone', async () => {

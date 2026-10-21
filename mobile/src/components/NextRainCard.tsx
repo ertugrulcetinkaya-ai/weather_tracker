@@ -84,7 +84,7 @@ export function NextRainCard({
                 ? formatRainCountdown(timing.millisecondsUntilStart)
                 : timing?.status === 'ended'
                   ? 'Bu yağış sona erdi.'
-                  : 'Yağış zamanı hesaplanamadı.'
+                  : 'Yağış zamanı kesin olarak hesaplanamıyor.'
             : 'Tahmin güncel değil. Geri sayım gösterilmiyor.',
           `Saat ${formatHour(nextRain.start_time)} ile ${formatHour(nextRain.end_time)} arasında.`,
           `Toplam ${formatPrecipitation(nextRain.total_precipitation)} mm.`,
@@ -114,7 +114,7 @@ export function NextRainCard({
                     ? formatRainCountdown(timing.millisecondsUntilStart)
                     : timing?.status === 'ended'
                       ? 'Bu yağış sona erdi.'
-                      : 'Yağış zamanı hesaplanamadı.'}
+                      : 'Yağış zamanı kesin olarak hesaplanamıyor.'}
               </Text>
             ) : (
               <Text style={styles.staleDetail}>
