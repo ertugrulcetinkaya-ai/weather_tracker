@@ -12,6 +12,31 @@ const rainEvent: RainEvent = {
   peak_time: '2026-08-24T18:00',
 };
 
+type AppStateListener = (state: string) => void;
+const initialAppState = AppState.currentState;
+
+function mockAppState() {
+  let listener: AppStateListener | undefined;
+  const subscriptions: Array<{ remove: jest.Mock }> = [];
+  const addEventListenerSpy = jest
+    .spyOn(AppState, 'addEventListener')
+    .mockImplementation((_event, nextListener) => {
+      listener = nextListener as AppStateListener;
+      const subscription = { remove: jest.fn() };
+      subscriptions.push(subscription);
+      return subscription as never;
+    });
+
+  return {
+    addEventListenerSpy,
+    subscriptions,
+    emit: (state: string) => {
+      AppState.currentState = state as typeof AppState.currentState;
+      listener?.(state);
+    },
+  };
+}
+
 describe('NextRainCard', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -19,6 +44,8 @@ describe('NextRainCard', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+    jest.restoreAllMocks();
+    AppState.currentState = initialAppState;
   });
 
   it.each([
@@ -83,6 +110,7 @@ describe('NextRainCard', () => {
     ],
   ])('does not claim an exact time for %s', async (_scenario, start_time, end_time, now) => {
     jest.setSystemTime(new Date(now));
+    const setIntervalSpy = jest.spyOn(global, 'setInterval');
     const ambiguousRain = { ...rainEvent, start_time, end_time };
     const { getByText, getByLabelText, queryByText } = await render(
       <NextRainCard
@@ -98,17 +126,12 @@ describe('NextRainCard', () => {
     ).toBeTruthy();
     expect(queryByText(/Başlamasına .* kaldı/)).toBeNull();
     expect(queryByText('Yağış devam ediyor.')).toBeNull();
+    expect(setIntervalSpy).not.toHaveBeenCalled();
   });
 
   it('updates the visible remaining time once per minute', async () => {
     jest.setSystemTime(new Date('2026-08-24T14:30:00.000Z'));
-    let onAppStateChange: ((state: string) => void) | undefined;
-    const appStateSpy = jest.spyOn(AppState, 'addEventListener').mockImplementation(
-      (_event, listener) => {
-        onAppStateChange = listener as (state: string) => void;
-        return { remove: jest.fn() } as never;
-      },
-    );
+    const appState = mockAppState();
     const { getByText } = await render(
       <NextRainCard
         nextRain={rainEvent}
@@ -119,12 +142,94 @@ describe('NextRainCard', () => {
     expect(getByText('Başlamasına 30 dakika kaldı.')).toBeTruthy();
 
     await act(async () => {
-      onAppStateChange?.('active');
+      appState.emit('active');
       jest.advanceTimersByTime(60_000);
     });
 
     expect(getByText('Başlamasına 29 dakika kaldı.')).toBeTruthy();
-    appStateSpy.mockRestore();
+  });
+
+  it('updates future to ongoing to ended during one active render session', async () => {
+    jest.setSystemTime(new Date('2026-08-24T15:00:00.000Z'));
+    const appState = mockAppState();
+    const setIntervalSpy = jest.spyOn(global, 'setInterval');
+    const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+    const event = {
+      ...rainEvent,
+      start_time: '2026-08-24T18:01',
+      end_time: '2026-08-24T18:02',
+    };
+    const { getByText, getByLabelText } = await render(
+      <NextRainCard nextRain={event} timezone="Europe/Istanbul" forecastCurrent />,
+    );
+
+    expect(getByText('Başlamasına 1 dakika kaldı.')).toBeTruthy();
+    await act(async () => appState.emit('active'));
+    expect(setIntervalSpy).toHaveBeenCalled();
+
+    await act(async () => jest.advanceTimersByTime(60_000));
+    expect(getByText('Yağış devam ediyor.')).toBeTruthy();
+    expect(getByLabelText(/Yağış devam ediyor/)).toBeTruthy();
+    const ongoingInterval = setIntervalSpy.mock.results.at(-1)?.value;
+    expect(ongoingInterval).toBeDefined();
+
+    await act(async () => jest.advanceTimersByTime(60_000));
+    expect(getByText('Bu yağış sona erdi.')).toBeTruthy();
+    expect(getByLabelText(/Bu yağış sona erdi/)).toBeTruthy();
+    expect(clearIntervalSpy).toHaveBeenCalledWith(ongoingInterval);
+    expect(appState.subscriptions.at(-1)?.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves from ongoing to ended when the card first renders during rain', async () => {
+    jest.setSystemTime(new Date('2026-08-24T15:00:00.000Z'));
+    const appState = mockAppState();
+    const event = {
+      ...rainEvent,
+      start_time: '2026-08-24T18:00',
+      end_time: '2026-08-24T18:01',
+    };
+    const { getByText, getByLabelText } = await render(
+      <NextRainCard nextRain={event} timezone="Europe/Istanbul" forecastCurrent />,
+    );
+
+    expect(getByText('Yağış devam ediyor.')).toBeTruthy();
+    await act(async () => appState.emit('active'));
+    await act(async () => jest.advanceTimersByTime(60_000));
+
+    expect(getByText('Bu yağış sona erdi.')).toBeTruthy();
+    expect(getByLabelText(/Bu yağış sona erdi/)).toBeTruthy();
+  });
+
+  it('stops while backgrounded and recalculates against the real time on foreground', async () => {
+    jest.setSystemTime(new Date('2026-08-24T15:00:00.000Z'));
+    const appState = mockAppState();
+    const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+    const event = {
+      ...rainEvent,
+      start_time: '2026-08-24T18:01',
+      end_time: '2026-08-24T18:02',
+    };
+    const { getByText, queryByText } = await render(
+      <NextRainCard nextRain={event} timezone="Europe/Istanbul" forecastCurrent />,
+    );
+
+    expect(getByText('Başlamasına 1 dakika kaldı.')).toBeTruthy();
+    await act(async () => appState.emit('active'));
+    await act(async () => appState.emit('background'));
+    expect(clearIntervalSpy).toHaveBeenCalled();
+    await act(async () => jest.advanceTimersByTime(60_000));
+    expect(getByText('Başlamasına 1 dakika kaldı.')).toBeTruthy();
+
+    await act(async () => appState.emit('active'));
+    expect(getByText('Yağış devam ediyor.')).toBeTruthy();
+    expect(queryByText(/Başlamasına .* kaldı/)).toBeNull();
+
+    await act(async () => appState.emit('background'));
+    await act(async () => jest.advanceTimersByTime(60_000));
+    expect(getByText('Yağış devam ediyor.')).toBeTruthy();
+    await act(async () => appState.emit('active'));
+
+    expect(getByText('Bu yağış sona erdi.')).toBeTruthy();
   });
 
   it('shows that rain is ongoing when now falls between its local start and end', async () => {
@@ -149,6 +254,8 @@ describe('NextRainCard', () => {
 
   it('shows that rain has ended when now is after its end', async () => {
     jest.setSystemTime(new Date('2026-08-24T16:30:00.000Z'));
+    const setIntervalSpy = jest.spyOn(global, 'setInterval');
+    const appStateSpy = jest.spyOn(AppState, 'addEventListener');
     const { getByText, getByLabelText } = await render(
       <NextRainCard
         nextRain={rainEvent}
@@ -159,6 +266,30 @@ describe('NextRainCard', () => {
 
     expect(getByText('Bu yağış sona erdi.')).toBeTruthy();
     expect(getByLabelText(/Bu yağış sona erdi/)).toBeTruthy();
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+    expect(appStateSpy).not.toHaveBeenCalled();
+  });
+
+  it('cleans up the active timer and AppState subscription when unmounted', async () => {
+    jest.setSystemTime(new Date('2026-08-24T14:30:00.000Z'));
+    const appState = mockAppState();
+    const setIntervalSpy = jest.spyOn(global, 'setInterval');
+    const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+    const { unmount } = await render(
+      <NextRainCard
+        nextRain={rainEvent}
+        timezone="Europe/Istanbul"
+        forecastCurrent
+      />,
+    );
+    await act(async () => appState.emit('active'));
+    const activeInterval = setIntervalSpy.mock.results.at(-1)?.value;
+
+    await act(async () => unmount());
+
+    expect(activeInterval).toBeDefined();
+    expect(clearIntervalSpy).toHaveBeenCalledWith(activeInterval);
+    expect(appState.subscriptions.at(-1)?.remove).toHaveBeenCalledTimes(1);
   });
 
   it('does not show a countdown for an offline cached forecast without a timezone', async () => {

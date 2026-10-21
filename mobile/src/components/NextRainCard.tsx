@@ -31,7 +31,11 @@ export function NextRainCard({
       : getRainTiming(nextRain, timezone, now);
 
   useEffect(() => {
-    if (!forecastCurrent || nextRain === null || timing?.status !== 'future') {
+    if (
+      !forecastCurrent ||
+      nextRain === null ||
+      (timing?.status !== 'future' && timing?.status !== 'ongoing')
+    ) {
       return undefined;
     }
 
