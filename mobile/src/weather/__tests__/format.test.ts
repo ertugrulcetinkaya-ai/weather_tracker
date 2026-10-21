@@ -17,6 +17,9 @@ describe('weather number formatting', () => {
     [1.2, '1.2'],
     [1.25, '1.25'],
     [1.234, '1.23'],
+    [0.001, '<0.01'],
+    [0.009, '<0.01'],
+    [0.01, '0.01'],
     [1.2000000000000002, '1.2'],
   ])('formats precipitation %s as %s', (value, expected) => {
     expect(formatPrecipitation(value)).toBe(expected);

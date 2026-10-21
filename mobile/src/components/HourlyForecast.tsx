@@ -8,14 +8,29 @@ type HourlyForecastProps = {
   rainStartTime?: string | null;
 };
 
+function formatHour(time: string): string {
+  const timePart = time.split('T')[1] ?? time;
+  const match = timePart.match(/^(\d{2}):(\d{2})/);
+  return match ? match[1] + ':' + match[2] : timePart;
+}
+
+function followingHour(time: string): string | null {
+  // Treat the wall-clock components as UTC so incrementing is device-timezone independent.
+  const timestamp = Date.parse(time + ':00Z');
+  if (!Number.isFinite(timestamp)) return null;
+  return new Date(timestamp + 60 * 60 * 1000).toISOString().slice(0, 16);
+}
+
 export function HourlyForecast({
   hourly,
   rainStartTime = null,
 }: HourlyForecastProps) {
+  const rainStartRecordTime =
+    rainStartTime === null ? null : followingHour(rainStartTime);
   const firstRainStartIndex =
-    rainStartTime === null
+    rainStartRecordTime === null
       ? -1
-      : hourly.findIndex((candidate) => candidate.time === rainStartTime);
+      : hourly.findIndex((candidate) => candidate.time === rainStartRecordTime);
 
   return (
     <>
@@ -27,7 +42,28 @@ export function HourlyForecast({
         contentContainerStyle={styles.hourlyContent}
       >
         {hourly.map((hour, index) => {
-          const isFirstRainStart = index === firstRainStartIndex;
+          const isFirstRainStart =
+            index === firstRainStartIndex && hour.precipitation > 0;
+          const rainStartLabel =
+            isFirstRainStart && rainStartTime !== null
+              ? [
+                  'Yağış başlangıcı saat ',
+                  formatHour(rainStartTime),
+                  '; saatlik sıcaklık saati ',
+                  formatHour(hour.time),
+                  ', sıcaklık ',
+                  String(Math.round(hour.temperature)),
+                  '°C; ',
+                  formatHour(rainStartTime),
+                  '–',
+                  formatHour(hour.time),
+                  ' aralığında yağış ihtimali %',
+                  String(hour.precipitation_probability),
+                  ', yağış miktarı ',
+                  formatPrecipitation(hour.precipitation),
+                  ' mm',
+                ].join('')
+              : '';
           return (
             <View
               key={hour.time}
@@ -36,14 +72,18 @@ export function HourlyForecast({
                 isFirstRainStart && styles.hourlyCardRainStart,
               ]}
               accessible={isFirstRainStart}
-              accessibilityLabel={
-                isFirstRainStart
-                  ? `Yağış başlangıcı, saat ${hour.time.slice(11, 16)}, sıcaklık ${Math.round(hour.temperature)}°C, yağış ihtimali %${hour.precipitation_probability}, yağış miktarı ${formatPrecipitation(hour.precipitation)} mm`
-                  : ''
-              }
+              accessibilityLabel={rainStartLabel}
               accessibilityRole="text"
             >
               <Text style={styles.hourlyTime}>{hour.time.slice(11, 16)}</Text>
+              {isFirstRainStart && rainStartTime !== null && (
+                <View style={styles.hourlyRainStartMarker} testID="rain-start-marker">
+                  <Text style={styles.hourlyRainStartLabel}>Yağış başlar</Text>
+                  <Text style={styles.hourlyRainStartTime}>
+                    {formatHour(rainStartTime)}
+                  </Text>
+                </View>
+              )}
               <Text style={styles.hourlyEmoji}>
                 {getWeatherCondition(hour.weather_code).emoji}
               </Text>
@@ -97,11 +137,29 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#0ea5e9',
     backgroundColor: '#e0f2fe',
+    paddingHorizontal: 6,
   },
   hourlyTime: {
     fontSize: 11,
     color: '#777',
     marginBottom: 6,
+  },
+  hourlyRainStartMarker: {
+    alignItems: 'center',
+  },
+  hourlyRainStartLabel: {
+    maxWidth: 60,
+    fontSize: 8.5,
+    lineHeight: 10,
+    fontWeight: '600',
+    color: '#0369a1',
+    textAlign: 'center',
+  },
+  hourlyRainStartTime: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: 'bold',
+    color: '#0369a1',
   },
   hourlyEmoji: {
     fontSize: 22,

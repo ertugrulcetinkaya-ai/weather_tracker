@@ -6,6 +6,7 @@ from app.weather.models import HourlyWeather, RainEvent
 
 
 def find_rain_events(hourly: list[HourlyWeather]) -> list[RainEvent]:
+    # Open-Meteo labels preceding-hour amounts with the interval's ending time.
     if not hourly:
         return []
 
@@ -28,15 +29,19 @@ def find_rain_events(hourly: list[HourlyWeather]) -> list[RainEvent]:
                 i += 1
 
             if i < n:
-                end_time = _parse_time(hourly[i].time)
+                end_time = _parse_time(hourly[i].time) - timedelta(hours=1)
             else:
-                end_time = _parse_time(hourly[i - 1].time) + timedelta(hours=1)
+                end_time = _parse_time(hourly[i - 1].time)
 
             events.append(RainEvent(
-                start_time=hourly[start_idx].time,
+                start_time=_format_time(
+                    _parse_time(hourly[start_idx].time) - timedelta(hours=1)
+                ),
                 end_time=_format_time(end_time),
-                total_precipitation=round(total, 2),
-                peak_time=hourly[peak_idx].time,
+                total_precipitation=total,
+                peak_time=_format_time(
+                    _parse_time(hourly[peak_idx].time) - timedelta(hours=1)
+                ),
             ))
         else:
             i += 1

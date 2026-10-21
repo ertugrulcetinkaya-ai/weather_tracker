@@ -162,10 +162,10 @@ def test_overview_builds_screen_with_one_upstream_request():
         "weather_code": 1,
     }
     assert data["next_rain"] == {
-        "start_time": "2026-08-24T16:00",
-        "end_time": "2026-08-24T17:00",
+        "start_time": "2026-08-24T15:00",
+        "end_time": "2026-08-24T16:00",
         "total_precipitation": 1.25,
-        "peak_time": "2026-08-24T16:00",
+        "peak_time": "2026-08-24T15:00",
     }
 
 

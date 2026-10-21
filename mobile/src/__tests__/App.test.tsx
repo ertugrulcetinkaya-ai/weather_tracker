@@ -266,7 +266,7 @@ describe('App pull-to-refresh', () => {
       ...overview('Elazığ'),
       hourly: [
         {
-          time: '2026-09-04T14:00',
+          time: '2026-09-04T15:00',
           temperature: 19,
           precipitation: 0.8,
           precipitation_probability: 65,
@@ -276,9 +276,9 @@ describe('App pull-to-refresh', () => {
       ],
       next_rain: {
         start_time: '2026-09-04T14:00',
-        end_time: '2026-09-04T16:00',
-        total_precipitation: 2,
-        peak_time: '2026-09-04T15:00',
+        end_time: '2026-09-04T15:00',
+        total_precipitation: 0.8,
+        peak_time: '2026-09-04T14:00',
       },
     };
     const cachedRecord: WeatherCacheRecord = {
@@ -310,8 +310,8 @@ describe('App pull-to-refresh', () => {
 
     await waitFor(() => expect(getByText(`Backend: Bağlantı yok ${expectedLastUpdate}`)).toBeOnTheScreen());
     expect(getByText('21°')).toBeOnTheScreen();
-    expect(getByText('14:00').parent?.props.accessibilityLabel).toBe(
-      'Yağış başlangıcı, saat 14:00, sıcaklık 19°C, yağış ihtimali %65, yağış miktarı 0.8 mm'
+    expect(getByText('15:00').parent?.props.accessibilityLabel).toBe(
+      'Yağış başlangıcı saat 14:00; saatlik sıcaklık saati 15:00, sıcaklık 19°C; 14:00–15:00 aralığında yağış ihtimali %65, yağış miktarı 0.8 mm'
     );
   });
 });
