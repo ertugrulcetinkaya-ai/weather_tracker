@@ -15,7 +15,7 @@ FIXED_UTC = datetime(2026, 8, 24, 12, 30, tzinfo=timezone.utc)
 CURRENT_TARGET_TIME = "2026-08-24T15:00"
 
 HOURLY_TIMES = [f"2026-08-24T{hour:02d}:00" for hour in range(15, 24)] + [
-    f"2026-08-25T{hour:02d}:00" for hour in range(15)
+    f"2026-08-25T{hour:02d}:00" for hour in range(16)
 ]
 DAILY_DATES = [
     "2026-08-24",
@@ -59,13 +59,13 @@ def _daily_block(**overrides):
 def _overview_payload(daily=None, **hourly_overrides):
     hourly = {
         "time": list(HOURLY_TIMES),
-        "temperature_2m": [28.4, 27.9, 27.1] + [27.0] * 21,
-        "relative_humidity_2m": [42, 45, 48] + [50] * 21,
-        "apparent_temperature": [29.1, 28.8, 28.0] + [27.5] * 21,
-        "weather_code": [1, 61, 2] + [1] * 21,
-        "wind_speed_10m": [13.2, 15.5, 12.1] + [10.0] * 21,
-        "precipitation": [0.0, 1.25, 0.0] + [0.0] * 21,
-        "precipitation_probability": [10, 35, 60] + [10] * 21,
+        "temperature_2m": [28.4, 27.9, 27.1] + [27.0] * 22,
+        "relative_humidity_2m": [42, 45, 48] + [50] * 22,
+        "apparent_temperature": [29.1, 28.8, 28.0] + [27.5] * 22,
+        "weather_code": [1, 61, 2] + [1] * 22,
+        "wind_speed_10m": [13.2, 15.5, 12.1] + [10.0] * 22,
+        "precipitation": [0.0, 1.25, 0.0] + [0.0] * 22,
+        "precipitation_probability": [10, 35, 60] + [10] * 22,
     }
     hourly.update(hourly_overrides)
     payload = {"timezone": "Europe/Istanbul", "hourly": hourly}
