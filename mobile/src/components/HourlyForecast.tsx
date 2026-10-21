@@ -1,182 +1,211 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { HourlyWeather } from '../types/weather';
-import { getWeatherCondition } from '../weather/condition';
-import { formatPrecipitation } from '../weather/format';
+import { getWeatherTheme } from '../weather/theme';
+import type { WeatherTheme } from '../weather/theme';
+import { getHourlyChartPalette, HourlyWeatherChart } from './HourlyWeatherChart';
 
 type HourlyForecastProps = {
   hourly: HourlyWeather[];
   rainStartTime?: string | null;
+  theme?: WeatherTheme;
 };
 
 function formatHour(time: string): string {
-  const timePart = time.split('T')[1] ?? time;
-  const match = timePart.match(/^(\d{2}):(\d{2})/);
-  return match ? match[1] + ':' + match[2] : timePart;
+  const match = /(?:T|^)(\d{2}):(\d{2})/.exec(time);
+  return match ? `${match[1]}:${match[2]}` : time;
 }
 
-function followingHour(time: string): string | null {
-  // Treat the wall-clock components as UTC so incrementing is device-timezone independent.
-  const timestamp = Date.parse(time + ':00Z');
+function shiftWallClockHour(time: string, hourOffset: number): string | null {
+  const wallClockTime = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/.exec(time)?.[1];
+  if (!wallClockTime) return null;
+
+  // Keep provider wall-clock times independent of the device timezone and DST.
+  const timestamp = Date.parse(`${wallClockTime}:00Z`);
   if (!Number.isFinite(timestamp)) return null;
-  return new Date(timestamp + 60 * 60 * 1000).toISOString().slice(0, 16);
+  return new Date(timestamp + hourOffset * 60 * 60 * 1000).toISOString().slice(0, 16);
 }
 
 export function HourlyForecast({
   hourly,
   rainStartTime = null,
+  theme,
 }: HourlyForecastProps) {
+  const resolvedTheme = theme ?? getWeatherTheme(hourly[0]?.weather_code);
+  const palette = getHourlyChartPalette(resolvedTheme);
   const rainStartRecordTime =
-    rainStartTime === null ? null : followingHour(rainStartTime);
+    rainStartTime === null ? null : shiftWallClockHour(rainStartTime, 1);
   const firstRainStartIndex =
     rainStartRecordTime === null
       ? -1
-      : hourly.findIndex((candidate) => candidate.time === rainStartRecordTime);
+      : hourly.findIndex((candidate) => candidate.time.slice(0, 16) === rainStartRecordTime);
+  const hasRainStart =
+    firstRainStartIndex >= 0 && hourly[firstRainStartIndex].precipitation > 0;
+  const rainStartInterval = hasRainStart
+    ? `${formatHour(rainStartTime ?? '')}–${formatHour(hourly[firstRainStartIndex].time)}`
+    : null;
 
   return (
-    <>
-      <Text style={styles.hourlyTitle}>Saatlik Tahmin</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.hourlyScroll}
-        contentContainerStyle={styles.hourlyContent}
+    <View style={styles.section}>
+      <View style={styles.titleRow}>
+        <Text
+          style={[
+            styles.hourlyTitle,
+            { color: resolvedTheme.text },
+          ]}
+        >
+          24 Saatlik Tahmin
+        </Text>
+        {hourly.length > 1 && (
+          <Text accessible={false} style={[styles.scrollHint, { color: resolvedTheme.mutedText }]}>
+            Yatay kaydırın →
+          </Text>
+        )}
+      </View>
+
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: resolvedTheme.surface,
+            borderColor: resolvedTheme.surfaceBorder,
+          },
+        ]}
       >
-        {hourly.map((hour, index) => {
-          const isFirstRainStart =
-            index === firstRainStartIndex && hour.precipitation > 0;
-          const rainStartLabel =
-            isFirstRainStart && rainStartTime !== null
-              ? [
-                  'Yağış başlangıcı saat ',
-                  formatHour(rainStartTime),
-                  '; saatlik sıcaklık saati ',
-                  formatHour(hour.time),
-                  ', sıcaklık ',
-                  String(Math.round(hour.temperature)),
-                  '°C; ',
-                  formatHour(rainStartTime),
-                  '–',
-                  formatHour(hour.time),
-                  ' aralığında yağış ihtimali %',
-                  String(hour.precipitation_probability),
-                  ', yağış miktarı ',
-                  formatPrecipitation(hour.precipitation),
-                  ' mm',
-                ].join('')
-              : '';
-          return (
-            <View
-              key={hour.time}
-              style={[
-                styles.hourlyCard,
-                isFirstRainStart && styles.hourlyCardRainStart,
-              ]}
-              accessible={isFirstRainStart}
-              accessibilityLabel={rainStartLabel}
-              accessibilityRole="text"
-            >
-              <Text style={styles.hourlyTime}>{hour.time.slice(11, 16)}</Text>
-              {isFirstRainStart && rainStartTime !== null && (
-                <View style={styles.hourlyRainStartMarker} testID="rain-start-marker">
-                  <Text style={styles.hourlyRainStartLabel}>Yağış başlar</Text>
-                  <Text style={styles.hourlyRainStartTime}>
-                    {formatHour(rainStartTime)}
-                  </Text>
-                </View>
-              )}
-              <Text style={styles.hourlyEmoji}>
-                {getWeatherCondition(hour.weather_code).emoji}
-              </Text>
-              <Text style={styles.hourlyTemperature}>
-                {Math.round(hour.temperature)}°C
-              </Text>
-              <Text style={styles.hourlyProbability}>
-                Yağış %{hour.precipitation_probability}
-              </Text>
-              <Text style={styles.hourlyPrecipitation}>
-                {formatPrecipitation(hour.precipitation)} mm
+        {hourly.length === 0 ? (
+          <Text
+            testID="hourly-empty-state"
+            style={[styles.emptyState, { color: resolvedTheme.mutedText }]}
+          >
+            Saatlik tahmin bulunmuyor.
+          </Text>
+        ) : (
+          <>
+            <View style={styles.legend} accessible={false}>
+              <View style={styles.legendItem}>
+                <View
+                  style={[
+                    styles.temperatureSwatch,
+                    { backgroundColor: palette.temperatureLine },
+                  ]}
+                />
+                <Text style={[styles.legendText, { color: resolvedTheme.text }]}>
+                  Sıcaklık (°C)
+                </Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View
+                  style={[
+                    styles.precipitationSwatch,
+                    { backgroundColor: palette.precipitationBar },
+                  ]}
+                />
+                <Text style={[styles.legendText, { color: resolvedTheme.text }]}>
+                  Yağış miktarı (mm)
+                </Text>
+              </View>
+              <Text style={[styles.legendText, { color: resolvedTheme.text }]}>
+                Yağış olasılığı (%)
               </Text>
             </View>
-          );
-        })}
-      </ScrollView>
-    </>
+
+            <Text style={[styles.intervalHint, { color: resolvedTheme.mutedText }]}>
+              Sıcaklık gösterilen saatte; her yağış sütunu o saatte biten önceki 1 saatte.
+            </Text>
+
+            {hasRainStart && rainStartInterval !== null && (
+              <View
+                accessible={false}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                style={[
+                  styles.rainStartNotice,
+                  { backgroundColor: resolvedTheme.accentSoft },
+                ]}
+              >
+                <Text
+                  allowFontScaling
+                  style={[styles.rainStartText, { color: resolvedTheme.text }]}
+                >
+                  Yağış başlar {formatHour(rainStartTime ?? '')} · ilk sütun {rainStartInterval}
+                </Text>
+              </View>
+            )}
+
+            <HourlyWeatherChart
+              hourly={hourly}
+              theme={resolvedTheme}
+              rainStartIndex={hasRainStart ? firstRainStartIndex : -1}
+              rainStartTime={rainStartTime}
+              rainStartInterval={rainStartInterval}
+            />
+          </>
+        )}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hourlyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  section: { width: '100%' },
+  titleRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
     marginTop: 24,
     marginBottom: 12,
-    alignSelf: 'flex-start',
   },
-  hourlyScroll: {
-    width: '100%',
-    height: 160,
-    flexGrow: 0,
-  },
-  hourlyContent: {
-    flexDirection: 'row',
-    paddingRight: 16,
-    alignItems: 'flex-start',
-  },
-  hourlyCard: {
-    width: 72,
-    height: 150,
-    backgroundColor: '#f2f6fa',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e1e8f0',
-    padding: 10,
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  hourlyCardRainStart: {
-    borderWidth: 2,
-    borderColor: '#0ea5e9',
-    backgroundColor: '#e0f2fe',
-    paddingHorizontal: 6,
-  },
-  hourlyTime: {
-    fontSize: 11,
-    color: '#777',
-    marginBottom: 6,
-  },
-  hourlyRainStartMarker: {
-    alignItems: 'center',
-  },
-  hourlyRainStartLabel: {
-    maxWidth: 60,
-    fontSize: 8.5,
-    lineHeight: 10,
+  hourlyTitle: {
+    flexShrink: 1,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#0369a1',
+  },
+  scrollHint: {
+    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  card: {
+    width: '100%',
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingTop: 14,
+    paddingBottom: 12,
+    overflow: 'hidden',
+  },
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: 14,
+    rowGap: 8,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  temperatureSwatch: { width: 18, height: 3, borderRadius: 2 },
+  precipitationSwatch: { width: 8, height: 14, borderRadius: 5 },
+  legendText: { fontSize: 12, fontWeight: '500' },
+  intervalHint: {
+    paddingHorizontal: 14,
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 8,
+  },
+  rainStartNotice: {
+    alignSelf: 'stretch',
+    marginHorizontal: 14,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  rainStartText: { fontSize: 13, fontWeight: '600' },
+  emptyState: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    fontSize: 14,
     textAlign: 'center',
-  },
-  hourlyRainStartTime: {
-    fontSize: 10,
-    lineHeight: 12,
-    fontWeight: 'bold',
-    color: '#0369a1',
-  },
-  hourlyEmoji: {
-    fontSize: 22,
-    marginBottom: 6,
-  },
-  hourlyTemperature: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  hourlyProbability: {
-    fontSize: 10,
-    color: '#2563eb',
-    marginBottom: 2,
-  },
-  hourlyPrecipitation: {
-    fontSize: 10,
-    color: '#555',
   },
 });

@@ -182,6 +182,7 @@ export default function App() {
               <HourlyForecast
                 hourly={overview.hourly}
                 rainStartTime={overview.next_rain?.start_time ?? null}
+                theme={theme}
               />
 
               <DailyForecast daily={overview.daily} />
