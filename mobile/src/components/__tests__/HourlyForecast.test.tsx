@@ -5,6 +5,7 @@ import { render } from '@testing-library/react-native';
 import { HourlyForecast } from '../HourlyForecast';
 import { calculateTemperaturePointYValues } from '../HourlyWeatherChart';
 import type { HourlyWeather } from '../../types/weather';
+import { getWeatherTheme } from '../../weather/theme';
 
 function makeHour(
   time: string,
@@ -48,6 +49,21 @@ describe('HourlyForecast', () => {
     expect(getByText('35%', { includeHiddenElements: true })).toBeTruthy();
     expect(getByTestId('hourly-weather-icon-sunny-0', { includeHiddenElements: true })).toBeTruthy();
     expect(getByTestId('hourly-weather-icon-rain-1', { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  it('keeps the forecast heading readable on the white page in the rainy theme', async () => {
+    const { getByText } = await render(
+      <HourlyForecast
+        hourly={[
+          makeHour('2024-06-01T13:00', { weather_code: 61 }),
+          makeHour('2024-06-01T14:00', { weather_code: 61 }),
+        ]}
+        theme={getWeatherTheme(61)}
+      />,
+    );
+
+    expect(StyleSheet.flatten(getByText('24 Saatlik Tahmin').props.style).color).toBe('#15324D');
+    expect(StyleSheet.flatten(getByText('Yatay kaydırın →').props.style).color).toBe('#526B80');
   });
 
   it('renders all 24 records and connects every adjacent temperature sample', async () => {
