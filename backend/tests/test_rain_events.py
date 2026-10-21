@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -269,14 +269,12 @@ def test_next_rain_unordered_input():
 
 
 def test_rain_next_endpoint_with_rain():
+    current_hour = datetime(2026, 8, 26, 14)
     times = [
-        "2026-08-26T14:00",
-        "2026-08-26T15:00",
-        "2026-08-26T16:00",
-        "2026-08-26T17:00",
-        "2026-08-26T18:00",
+        (current_hour + timedelta(hours=offset)).strftime("%Y-%m-%dT%H:%M")
+        for offset in range(25)
     ]
-    precipitations = [0.0, 0.4, 2.1, 1.2, 0.0]
+    precipitations = [0.0, 0.4, 2.1, 1.2] + [0.0] * 21
     payload = _hourly_payload(times, precipitations)
     with mock.patch(
         "app.weather.open_meteo.httpx.get", return_value=_mock_response(payload)
@@ -291,12 +289,16 @@ def test_rain_next_endpoint_with_rain():
 
 
 def test_rain_next_endpoint_no_rain():
-    times = ["2026-08-26T14:00", "2026-08-26T15:00", "2026-08-26T16:00"]
-    precipitations = [0.0, 0.0, 0.0]
+    current_hour = datetime(2026, 8, 26, 14)
+    times = [
+        (current_hour + timedelta(hours=offset)).strftime("%Y-%m-%dT%H:%M")
+        for offset in range(25)
+    ]
+    precipitations = [0.0] * 25
     payload = _hourly_payload(times, precipitations)
     with mock.patch(
         "app.weather.open_meteo.httpx.get", return_value=_mock_response(payload)
-    ):
+    ), mock.patch("app.weather.open_meteo.datetime", _FixedDatetime):
         response = client.get("/weather/rain/next")
 
     assert response.status_code == 200
