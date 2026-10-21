@@ -177,6 +177,7 @@ export default function App() {
                 nextRain={overview.next_rain}
                 timezone={overview.timezone ?? ''}
                 forecastCurrent={refreshStatus === 'idle' && fetchedAt !== null}
+                theme={theme}
               />
 
               <HourlyForecast

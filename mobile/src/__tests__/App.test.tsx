@@ -301,7 +301,7 @@ describe('App pull-to-refresh', () => {
     mockedLoadWeatherCache.mockReturnValueOnce(cacheLoad.promise);
     mockedFetchWeatherOverview.mockReturnValueOnce(initialFetch.promise);
 
-    const { getByText, queryByText } = await render(<App />);
+    const { getByText, getAllByText, queryByText } = await render(<App />);
 
     await act(async () => {
       cacheLoad.resolve(cachedRecord);
@@ -321,7 +321,10 @@ describe('App pull-to-refresh', () => {
     expect(getByText('21°')).toBeOnTheScreen();
     expect(getByText('Tahmin güncel değil. Geri sayım gösterilmiyor.')).toBeOnTheScreen();
     expect(queryByText(/Başlamasına .* kaldı/)).toBeNull();
-    expect(getByText('15:00').parent?.props.accessibilityLabel).toBe(
+    const hourlyTime = getAllByText('15:00').find((element) =>
+      String(element.parent?.props.accessibilityLabel ?? '').includes('yağış olasılığı %65'),
+    );
+    expect(hourlyTime?.parent?.props.accessibilityLabel).toBe(
       'Yağış başlar 14:00; ilk yağış aralığı 14:00–15:00; Saat 15:00; sıcaklık 19 derece; hava durumu: Yağmurlu; yağış olasılığı %65; 14:00–15:00 aralığında yağış miktarı 0.8 mm'
     );
   });

@@ -1,9 +1,10 @@
 import React from 'react';
-import { AppState } from 'react-native';
+import { AppState, StyleSheet } from 'react-native';
 import { act, render } from '@testing-library/react-native';
 
 import { NextRainCard } from '../NextRainCard';
 import type { RainEvent } from '../../types/weather';
+import { getWeatherTheme } from '../../weather/theme';
 
 const rainEvent: RainEvent = {
   start_time: '2026-08-24T18:00',
@@ -53,15 +54,24 @@ describe('NextRainCard', () => {
     ['Ankara', 'Europe/Istanbul', '2026-08-24T14:30:00.000Z'],
   ])('shows the remaining time for %s in the selected city timezone', async (_city, timezone, now) => {
     jest.setSystemTime(new Date(now));
-    const { getByText, getByLabelText } = await render(
-      <NextRainCard nextRain={rainEvent} timezone={timezone} forecastCurrent />,
+    const { getByText, getByLabelText, getByTestId } = await render(
+      <NextRainCard
+        nextRain={rainEvent}
+        timezone={timezone}
+        forecastCurrent
+        theme={getWeatherTheme(0)}
+      />,
     );
 
-    expect(getByText('18:00 – 19:00')).toBeTruthy();
-    expect(getByText('Başlamasına 30 dakika kaldı.')).toBeTruthy();
-    expect(getByText('Toplam 4.5 mm')).toBeTruthy();
-    expect(getByText('En yoğun: 18:00')).toBeTruthy();
+    expect(getByTestId('rain-start-time').props.children).toBe('18:00');
+    expect(getByTestId('rain-end-time').props.children).toBe('19:00');
+    expect(getByTestId('next-rain-status').props.children).toBe(
+      'Başlamasına 30 dakika kaldı.',
+    );
+    expect(getByText('4.5 mm')).toBeTruthy();
+    expect(getByTestId('rain-peak-time').props.children).toBe('18:00');
     expect(getByLabelText(/Başlamasına 30 dakika kaldı/)).toBeTruthy();
+    expect(getByText('Seçili şehrin yerel saati')).toBeTruthy();
   });
 
   it('calculates the remaining time in a timezone different from Istanbul', async () => {
@@ -77,6 +87,7 @@ describe('NextRainCard', () => {
         nextRain={newYorkRain}
         timezone="America/New_York"
         forecastCurrent
+        theme={getWeatherTheme(0)}
       />,
     );
 
@@ -117,6 +128,7 @@ describe('NextRainCard', () => {
         nextRain={ambiguousRain}
         timezone="America/New_York"
         forecastCurrent
+        theme={getWeatherTheme(0)}
       />,
     );
 
@@ -137,6 +149,7 @@ describe('NextRainCard', () => {
         nextRain={rainEvent}
         timezone="Europe/Istanbul"
         forecastCurrent
+        theme={getWeatherTheme(61)}
       />,
     );
     expect(getByText('Başlamasına 30 dakika kaldı.')).toBeTruthy();
@@ -252,6 +265,33 @@ describe('NextRainCard', () => {
     expect(getByLabelText(/Yağış devam ediyor/)).toBeTruthy();
   });
 
+  it('uses the rainy theme surface and readable copy while rain is ongoing', async () => {
+    jest.setSystemTime(new Date('2026-08-24T15:30:00.000Z'));
+    const rainyTheme = getWeatherTheme(61);
+    const event = {
+      ...rainEvent,
+      start_time: '2026-08-24T18:00',
+      end_time: '2026-08-24T19:00',
+    };
+    const { getByTestId, getByText } = await render(
+      <NextRainCard
+        nextRain={event}
+        timezone="Europe/Istanbul"
+        forecastCurrent
+        theme={rainyTheme}
+      />,
+    );
+
+    expect(StyleSheet.flatten(getByTestId('next-rain-card').props.style).backgroundColor).toBe(
+      rainyTheme.surface,
+    );
+    expect(StyleSheet.flatten(getByTestId('next-rain-status').props.style).color).toBe(
+      rainyTheme.text,
+    );
+    expect(getByTestId('next-rain-status').props.children).toBe('Yağış devam ediyor.');
+    expect(StyleSheet.flatten(getByText('Sıradaki Yağış').props.style).color).toBe('#15324D');
+  });
+
   it('shows that rain has ended when now is after its end', async () => {
     jest.setSystemTime(new Date('2026-08-24T16:30:00.000Z'));
     const setIntervalSpy = jest.spyOn(global, 'setInterval');
@@ -334,5 +374,117 @@ describe('NextRainCard', () => {
 
     expect(getByText('Önümüzdeki 24 saatte yağış beklenmiyor.')).toBeTruthy();
     expect(getByText('Tahmin güncel olmayabilir.')).toBeTruthy();
+  });
+
+  it('uses a calm snowy theme when no rain is expected without showing a sun icon', async () => {
+    const snowyTheme = getWeatherTheme(71);
+    const { getByText, getByTestId, queryByText } = await render(
+      <NextRainCard
+        nextRain={null}
+        timezone="Europe/Istanbul"
+        forecastCurrent
+        theme={snowyTheme}
+      />,
+    );
+
+    expect(getByText('Önümüzdeki 24 saatte yağış beklenmiyor.')).toBeTruthy();
+    expect(queryByText('☀️')).toBeNull();
+    expect(queryByText(/kar başlayacak|kar yağacak/i)).toBeNull();
+    expect(StyleSheet.flatten(getByTestId('next-rain-card').props.style).backgroundColor).toBe(
+      snowyTheme.surface,
+    );
+  });
+
+  it('keeps local rain hours readable across midnight and preserves trace amounts', async () => {
+    jest.setSystemTime(new Date('2026-08-24T19:30:00.000Z'));
+    const overnightTrace = {
+      start_time: '2026-08-24T23:00',
+      end_time: '2026-08-25T01:00',
+      total_precipitation: 0.004,
+      peak_time: '2026-08-25T00:00',
+    };
+    const { getByTestId, getByText } = await render(
+      <NextRainCard
+        nextRain={overnightTrace}
+        timezone="Europe/Istanbul"
+        forecastCurrent
+        theme={getWeatherTheme(0)}
+      />,
+    );
+
+    expect(getByTestId('next-rain-status').props.children).toBe(
+      'Başlamasına 30 dakika kaldı.',
+    );
+    expect(getByTestId('rain-start-time').props.children).toBe('23:00');
+    expect(getByTestId('rain-end-time').props.children).toBe('01:00');
+    expect(getByText('<0.01 mm')).toBeTruthy();
+    expect(getByTestId('rain-peak-time').props.children).toBe('00:00');
+  });
+
+  it('shows cached rain details without presenting an exact countdown', async () => {
+    jest.setSystemTime(new Date('2026-08-24T14:30:00.000Z'));
+    const { getByText, getByTestId, queryByText, getByLabelText } = await render(
+      <NextRainCard
+        nextRain={rainEvent}
+        timezone="Europe/Istanbul"
+        forecastCurrent={false}
+        theme={getWeatherTheme(0)}
+      />,
+    );
+
+    expect(getByTestId('next-rain-status').props.children).toBe(
+      'Tahmin güncel değil. Geri sayım gösterilmiyor.',
+    );
+    expect(getByText('4.5 mm')).toBeTruthy();
+    expect(getByTestId('rain-start-time').props.children).toBe('18:00');
+    expect(queryByText(/Başlamasına .* kaldı/)).toBeNull();
+    expect(getByLabelText(/geri sayım gösterilmiyor/i)).toBeTruthy();
+    expect(getByText('SON KAYDEDİLEN TAHMİN')).toBeTruthy();
+  });
+
+  it.each([
+    ['sunny', 0],
+    ['cloudy', 3],
+    ['rainy', 61],
+    ['snowy', 71],
+    ['neutral', 999],
+  ])('keeps %s theme text contrast accessible on its card surfaces', async (_kind, code) => {
+    const theme = getWeatherTheme(code);
+    const luminance = (color: string) => {
+      const components = color
+        .slice(1)
+        .match(/.{2}/g)
+        ?.map((component) => parseInt(component, 16) / 255);
+      if (!components) throw new Error(`Invalid color: ${color}`);
+      const linear = components.map((value) =>
+        value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4,
+      );
+      return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+    };
+    const contrast = (foreground: string, background: string) => {
+      const first = luminance(foreground);
+      const second = luminance(background);
+      return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+    };
+
+    expect(contrast(theme.text, theme.surface)).toBeGreaterThanOrEqual(3);
+    expect(contrast(theme.mutedText, theme.surface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(theme.text, theme.accentSoft)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(theme.mutedText, theme.accentSoft)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('allows text to scale without fixed-height clipping on the card', async () => {
+    const { getByTestId } = await render(
+      <NextRainCard
+        nextRain={rainEvent}
+        timezone="Europe/Istanbul"
+        forecastCurrent
+        theme={getWeatherTheme(0)}
+      />,
+    );
+    const status = getByTestId('next-rain-status');
+
+    expect(status.props.allowFontScaling).toBe(true);
+    expect(StyleSheet.flatten(status.props.style).height).toBeUndefined();
   });
 });
