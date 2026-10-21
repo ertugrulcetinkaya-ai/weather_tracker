@@ -186,7 +186,7 @@ export default function App() {
                 theme={theme}
               />
 
-              <DailyForecast daily={overview.daily} />
+              <DailyForecast daily={overview.daily} theme={theme} />
             </View>
           )}
 

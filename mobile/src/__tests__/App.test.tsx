@@ -6,7 +6,7 @@ import { fetchWeatherOverview } from '../api/weather';
 import { loadWeatherCache } from '../storage/weatherCache';
 import type { WeatherCacheRecord } from '../storage/weatherCache';
 import type { LocationGeocodedAddress, LocationPermissionResponse } from 'expo-location';
-import type { WeatherOverview } from '../types/weather';
+import type { DailyWeather, WeatherOverview } from '../types/weather';
 import App from '../../App';
 
 jest.mock('expo-location', () => ({
@@ -178,6 +178,48 @@ describe('App device location wiring', () => {
   });
 });
 
+describe('App daily forecast data flow', () => {
+  it('removes the previous city forecast while the newly selected city loads', async () => {
+    const makeDay = (
+      date: string,
+      temperature_min: number,
+      temperature_max: number,
+    ): DailyWeather => ({
+      date,
+      temperature_min,
+      temperature_max,
+      precipitation: 0,
+      precipitation_probability: 0,
+      weather_code: 0,
+    });
+    const nextOverview = deferred<WeatherOverview>();
+    mockedFetchWeatherOverview
+      .mockResolvedValueOnce({
+        ...overview('Elazığ'),
+        daily: [makeDay('2026-09-06', 6, 18)],
+      })
+      .mockReturnValueOnce(nextOverview.promise);
+
+    const { getByRole, getByText, queryByText } = await render(<App />);
+    await waitFor(() => expect(getByText('Min 6°')).toBeOnTheScreen());
+
+    await fireEvent.press(getByRole('button', { name: 'Şehir seç' }));
+    await fireEvent.press(getByText('İstanbul'));
+    await waitFor(() => expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2));
+
+    expect(queryByText('Min 6°')).toBeNull();
+    await act(async () => {
+      nextOverview.resolve({
+        ...overview('İstanbul'),
+        daily: [makeDay('2026-09-07', -2, 12)],
+      });
+    });
+
+    await waitFor(() => expect(getByText('Min -2°')).toBeOnTheScreen());
+    expect(queryByText('Min 6°')).toBeNull();
+  });
+});
+
 describe('App pull-to-refresh', () => {
   it('invokes the existing refresh exactly once when the user pulls to refresh', async () => {
     const { getByText, getByTestId } = await render(<App />);
@@ -273,6 +315,14 @@ describe('App pull-to-refresh', () => {
     const cachedOverview: WeatherOverview = {
       ...overview('Elazığ'),
       timezone: null,
+      daily: Array.from({ length: 7 }, (_, index) => ({
+        date: `2026-09-${String(index + 4).padStart(2, '0')}`,
+        temperature_min: 12 + index,
+        temperature_max: 20 + index,
+        precipitation: index === 0 ? 0.3 : 0,
+        precipitation_probability: index === 0 ? 65 : 0,
+        weather_code: index === 0 ? 61 : 0,
+      })),
       hourly: [
         {
           time: '2026-09-04T15:00',
@@ -301,7 +351,7 @@ describe('App pull-to-refresh', () => {
     mockedLoadWeatherCache.mockReturnValueOnce(cacheLoad.promise);
     mockedFetchWeatherOverview.mockReturnValueOnce(initialFetch.promise);
 
-    const { getByText, getAllByText, queryByText } = await render(<App />);
+    const { getByText, getAllByText, getAllByTestId, queryByText } = await render(<App />);
 
     await act(async () => {
       cacheLoad.resolve(cachedRecord);
@@ -319,6 +369,9 @@ describe('App pull-to-refresh', () => {
 
     await waitFor(() => expect(getByText(`Backend: Bağlantı yok ${expectedLastUpdate}`)).toBeOnTheScreen());
     expect(getByText('21°')).toBeOnTheScreen();
+    expect(getByText('7 Günlük Tahmin')).toBeOnTheScreen();
+    expect(getAllByTestId(/^daily-forecast-row-\d+$/)).toHaveLength(7);
+    expect(getByText('Yağış %65')).toBeOnTheScreen();
     expect(getByText('Tahmin güncel değil. Geri sayım gösterilmiyor.')).toBeOnTheScreen();
     expect(queryByText(/Başlamasına .* kaldı/)).toBeNull();
     const hourlyTime = getAllByText('15:00').find((element) =>
