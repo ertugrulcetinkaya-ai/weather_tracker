@@ -581,11 +581,19 @@ def get_next_rain(
         HOURLY_FIELDS,
         latitude=latitude,
         longitude=longitude,
+        forecast_hours=FORECAST_HOURS + 1,
     )
-    hourly = _build_hourly_weather(payload.times, payload.hourly)
+    now = datetime.now(payload.timezone)
+    current_time = now.strftime("%Y-%m-%dT%H:00")
+    current_index = _select_hour_index(payload.times, current_time)
+    times, hourly_payload = _select_hourly_window(
+        payload,
+        start_index=current_index + 1,
+    )
+    hourly = _build_hourly_weather(times, hourly_payload)
     events = find_rain_events(hourly)
-    now = datetime.now(payload.timezone).strftime("%Y-%m-%dT%H:%M")
-    return find_next_rain_event(events, now)
+    now_time = now.strftime("%Y-%m-%dT%H:%M")
+    return find_next_rain_event(events, now_time)
 
 
 def search_locations(query: str) -> list[LocationSearchResult]:

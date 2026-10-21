@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -122,16 +122,29 @@ def test_rain_custom_coordinates():
 
 
 def test_rain_next_custom_coordinates():
+    payload = _hourly_payload()
+    current_hour = datetime(2026, 8, 24, 15)
+    times = [
+        (current_hour + timedelta(hours=offset)).strftime("%Y-%m-%dT%H:%M")
+        for offset in range(25)
+    ]
+    payload["hourly"]["time"] = times
+    for field, values in payload["hourly"].items():
+        if field != "time":
+            values.append(values[-1])
+
     with mock.patch("app.weather.open_meteo.httpx.get") as mock_get:
-        mock_get.return_value = _mock_response(_hourly_payload())
-        response = client.get(
-            "/weather/rain/next",
-            params={"latitude": ISTANBUL_LAT, "longitude": ISTANBUL_LON},
-        )
+        mock_get.return_value = _mock_response(payload)
+        with mock.patch("app.weather.open_meteo.datetime", _FixedDatetime):
+            response = client.get(
+                "/weather/rain/next",
+                params={"latitude": ISTANBUL_LAT, "longitude": ISTANBUL_LON},
+            )
     assert response.status_code == 200
     call_kwargs = mock_get.call_args[1]
     assert call_kwargs["params"]["latitude"] == ISTANBUL_LAT
     assert call_kwargs["params"]["longitude"] == ISTANBUL_LON
+    assert call_kwargs["params"]["forecast_hours"] == 25
 
 
 def test_only_latitude_returns_422():
