@@ -3,6 +3,7 @@ import { render, fireEvent } from '@testing-library/react-native';
 
 import { LocationControls } from '../LocationControls';
 import type { LocationSearchResult, WeatherLocation } from '../../types/weather';
+import { getWeatherTheme } from '../../weather/theme';
 
 const FAVORITE_CHIP_BERLIN_TEST_ID = 'favorite-chip-Berlin';
 const FAVORITE_CHIP_KYOTO_TEST_ID = 'favorite-chip-Kyoto';
@@ -73,6 +74,7 @@ async function renderControls(overrides: RenderOptions = {}) {
     persistenceError: false,
     isFavorite: false,
     deviceLocationStatus: 'idle' as const,
+    theme: getWeatherTheme(0),
     isSelected: (_location: WeatherLocation) => false,
     onLocationSelect: jest.fn(),
     onSearchResultSelect: jest.fn(),
@@ -88,12 +90,15 @@ async function renderControls(overrides: RenderOptions = {}) {
 }
 
 describe('LocationControls quick cities', () => {
-  it('renders every quick city and reports presses with the matching location', async () => {
-    const { getByText, props } = await renderControls();
+  it('opens the city picker and reports presses with the matching location', async () => {
+    const { getByText, queryByText, props } = await renderControls();
 
+    expect(queryByText('Izmir')).toBeNull();
+    await fireEvent.press(getByText('Şehir seç'));
     await fireEvent.press(getByText('Izmir'));
     expect(props.onLocationSelect).toHaveBeenCalledWith(izmir);
 
+    await fireEvent.press(getByText('Şehir seç'));
     await fireEvent.press(getByText('Istanbul'));
     expect(props.onLocationSelect).toHaveBeenLastCalledWith(istanbul);
     expect(props.onLocationSelect).toHaveBeenCalledTimes(2);
@@ -104,6 +109,8 @@ describe('LocationControls quick cities', () => {
       locations: [izmir, istanbul, ankara],
       isSelected: (location) => location.name === 'Istanbul',
     });
+
+    await fireEvent.press(getByRole('button', { name: 'Şehir seç' }));
 
     // accessibilityState lives on the Pressable host, so query the button hosts.
     expect(
@@ -201,35 +208,39 @@ describe('LocationControls search status', () => {
 });
 
 describe('LocationControls favorites', () => {
-  it('hides the favorites section entirely when there are no favorites', async () => {
-    const { queryByText } = await renderControls({ favorites: [] });
+  it('keeps favorites out of the compact default view when there are none', async () => {
+    const { getByRole, queryByTestId, queryByText } = await renderControls({ favorites: [] });
 
     expect(queryByText('Favoriler')).toBeNull();
+    expect(queryByTestId(FAVORITE_CHIP_BERLIN_TEST_ID)).toBeNull();
+    await fireEvent.press(getByRole('button', { name: 'Şehir seç' }));
     expect(queryByText('Berlin')).toBeNull();
   });
 
-  it('renders each favorite chip and reports presses with the favorite location', async () => {
-    const { getByTestId, getByText, props } = await renderControls({
+  it('shows favorite chips in the city picker and reports presses with the favorite location', async () => {
+    const { getByRole, getByTestId, props } = await renderControls({
       favorites: [berlinFavorite, kyotoFavorite],
     });
 
-    expect(getByText('Favoriler')).toBeOnTheScreen();
+    await fireEvent.press(getByRole('button', { name: 'Şehir seç' }));
     expect(getByTestId('favorite-chip-Berlin')).toBeOnTheScreen();
     expect(getByTestId('favorite-chip-Kyoto')).toBeOnTheScreen();
 
-    await fireEvent.press(getByText('Kyoto'));
+    await fireEvent.press(getByTestId('favorite-chip-Kyoto'));
     expect(props.onLocationSelect).toHaveBeenCalledTimes(1);
     expect(props.onLocationSelect).toHaveBeenCalledWith(kyotoFavorite);
   });
 
   it('reflects the selected favorite through accessibility state only for that chip', async () => {
-    const { getByTestId } = await renderControls({
+    const { getByRole, getByTestId } = await renderControls({
       favorites: [berlinFavorite, kyotoFavorite],
       isSelected: (location) =>
         location.name === kyotoFavorite.name &&
         location.latitude === kyotoFavorite.latitude &&
         location.longitude === kyotoFavorite.longitude,
     });
+
+    await fireEvent.press(getByRole('button', { name: 'Şehir seç' }));
 
     // The chip host (Pressable) owns accessibilityState, not its inner Text.
     expect(
@@ -245,17 +256,25 @@ describe('LocationControls favorites', () => {
   });
 
   it('keeps the favorite chip tap target and text metrics intact', async () => {
-    const { getByTestId, getByText } = await renderControls({
+    const { getByRole, getByTestId, getByText } = await renderControls({
       favorites: [berlinFavorite],
     });
 
+    await fireEvent.press(getByRole('button', { name: 'Şehir seç' }));
+
     const chip = getByTestId(FAVORITE_CHIP_BERLIN_TEST_ID);
-    // RNTL testID lookup resolves to the chip host, which carries the merged
-    // Pressable style and the accessibility role.
     expect(chip.props.accessibilityRole).toBe('button');
 
-    const chipStyle = StyleSheet.flatten(chip.props.style) as object;
-    expect(chipStyle).toMatchObject({
+    const touchTargetStyle = StyleSheet.flatten(chip.props.style) as object;
+    expect(touchTargetStyle).toMatchObject({
+      minHeight: 48,
+      minWidth: 110,
+    });
+
+    const visualStyle = StyleSheet.flatten(
+      getByTestId('favorite-chip-visual-Berlin').props.style,
+    ) as object;
+    expect(visualStyle).toMatchObject({
       height: 44,
       minWidth: 110,
       flexShrink: 0,
@@ -272,19 +291,23 @@ describe('LocationControls favorites', () => {
 
 describe('LocationControls favorite toggle', () => {
   it('invites the user to add the current location when it is not a favorite', async () => {
-    const { getByText, props } = await renderControls({ isFavorite: false });
+    const { getByRole, props } = await renderControls({ isFavorite: false });
 
-    await fireEvent.press(getByText('☆ Favoriye ekle'));
+    const button = getByRole('button', { name: 'Favoriye ekle' });
+    const style = StyleSheet.flatten(button.props.style) as object;
+    expect(style).toMatchObject({ width: 48, height: 48 });
+
+    await fireEvent.press(button);
     expect(props.onFavoriteToggle).toHaveBeenCalledTimes(1);
   });
 
   it('offers removal when the current location is already a favorite', async () => {
-    const { getByText, queryByText, props } = await renderControls({
+    const { getByRole, queryByRole, props } = await renderControls({
       isFavorite: true,
     });
 
-    expect(queryByText('☆ Favoriye ekle')).toBeNull();
-    await fireEvent.press(getByText('★ Favorilerden çıkar'));
+    expect(queryByRole('button', { name: 'Favoriye ekle' })).toBeNull();
+    await fireEvent.press(getByRole('button', { name: 'Favorilerden çıkar' }));
     expect(props.onFavoriteToggle).toHaveBeenCalledTimes(1);
   });
 });
@@ -317,7 +340,7 @@ describe('LocationControls current location button', () => {
 
     expect(getByLabelText('Mevcut konumumu kullan')).toBeOnTheScreen();
 
-    await fireEvent.press(getByText('📍 Mevcut konumum'));
+    await fireEvent.press(getByLabelText('Mevcut konumumu kullan'));
     expect(props.onCurrentLocation).toHaveBeenCalledTimes(1);
   });
 
@@ -337,7 +360,7 @@ describe('LocationControls current location button', () => {
     ).toBeNull();
 
     expect(getByText('Konum alınıyor...')).toBeOnTheScreen();
-    expect(queryByText('📍 Mevcut konumum')).toBeNull();
+    expect(queryByText('◎')).toBeNull();
 
     await fireEvent.press(getByText('Konum alınıyor...'));
     expect(props.onCurrentLocation).not.toHaveBeenCalled();

@@ -7,6 +7,7 @@ import { DailyForecast } from './src/components/DailyForecast';
 import { NextRainCard } from './src/components/NextRainCard';
 import { HourlyForecast } from './src/components/HourlyForecast';
 import { LocationControls } from './src/components/LocationControls';
+import { WeatherSurface } from './src/components/WeatherSurface';
 
 import { useDeviceLocation } from './src/hooks/useDeviceLocation';
 import { useLocationPreferences } from './src/hooks/useLocationPreferences';
@@ -14,6 +15,7 @@ import { useLocationSearch } from './src/hooks/useLocationSearch';
 import { useWeatherOverview } from './src/hooks/useWeatherOverview';
 import { isSameLocation } from './src/storage/locations';
 import type { LocationSearchResult, WeatherLocation } from './src/types/weather';
+import { getWeatherTheme } from './src/weather/theme';
 
 function formatLastUpdate(fetchedAt: number | null): string {
   if (fetchedAt === null) return '';
@@ -62,6 +64,8 @@ export default function App() {
   };
 
   const isFavorite = favorites.some((f) => isSameLocation(f, selectedLocation));
+  const weatherCode = overview?.current.weather_code ?? null;
+  const theme = getWeatherTheme(weatherCode);
 
   const handleFavoriteToggle = () => {
     toggleFavorite(selectedLocation);
@@ -102,133 +106,176 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        testID="weather-scroll-view"
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshStatus === 'loading'}
-            onRefresh={() => void refresh()}
+    <WeatherSurface weatherCode={weatherCode}>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style={theme.statusBarStyle} />
+        <ScrollView
+          testID="weather-scroll-view"
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshStatus === 'loading'}
+              onRefresh={() => void refresh()}
+            />
+          }
+        >
+          <View style={styles.header}>
+            <View
+              accessible={false}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={[styles.brandMark, { backgroundColor: theme.accentSoft }]}
+            >
+              <Text style={[styles.brandLetter, { color: theme.accent }]}>H</Text>
+            </View>
+            <Text style={[styles.title, { color: theme.text }]}>Hava Takip</Text>
+          </View>
+
+          <LocationControls
+            locations={WEATHER_LOCATIONS}
+            favorites={favorites}
+            searchQuery={search.query}
+            searchStatus={search.status}
+            searchResults={search.results}
+            persistenceError={persistenceError}
+            isFavorite={isFavorite}
+            deviceLocationStatus={deviceLocation.status}
+            theme={theme}
+            isSelected={(location) => isSameLocation(location, selectedLocation)}
+            onLocationSelect={handleCitySelect}
+            onSearchResultSelect={handleSearchSelect}
+            onSearchQueryChange={search.setQuery}
+            onFavoriteToggle={handleFavoriteToggle}
+            onCurrentLocation={handleCurrentLocation}
           />
-        }
-      >
-      <Text style={styles.title}>Hava Takip</Text>
 
-      <LocationControls
-        locations={WEATHER_LOCATIONS}
-        favorites={favorites}
-        searchQuery={search.query}
-        searchStatus={search.status}
-        searchResults={search.results}
-        persistenceError={persistenceError}
-        isFavorite={isFavorite}
-        deviceLocationStatus={deviceLocation.status}
-        isSelected={(location) => isSameLocation(location, selectedLocation)}
-        onLocationSelect={handleCitySelect}
-        onSearchResultSelect={handleSearchSelect}
-        onSearchQueryChange={search.setQuery}
-        onFavoriteToggle={handleFavoriteToggle}
-        onCurrentLocation={handleCurrentLocation}
-      />
+          {(!hydrated || overviewStatus === 'idle' || overviewStatus === 'loading') && (
+            <Text style={[styles.loadingStatus, { color: theme.text }]}>Hava durumu yükleniyor...</Text>
+          )}
+          {overviewStatus === 'error' && (
+            <View
+              style={[
+                styles.errorState,
+                { backgroundColor: theme.surface, borderColor: theme.surfaceBorder },
+              ]}
+            >
+              <Text accessibilityRole="alert" style={{ color: theme.errorText }}>
+                Hava durumu alınamadı.
+              </Text>
+              <Button title="Tekrar Dene" onPress={() => void refresh()} />
+            </View>
+          )}
+          {overviewStatus === 'ready' && overview !== null && (
+            <CurrentWeatherCard current={overview.current} fetchedAt={fetchedAt} />
+          )}
 
-      {(!hydrated || overviewStatus === 'idle' || overviewStatus === 'loading') && (
-        <Text style={styles.loadingStatus}>Hava durumu yükleniyor...</Text>
-      )}
-      {overviewStatus === 'error' && (
-        <View style={styles.errorState}>
-          <Text accessibilityRole="alert" style={styles.errorText}>
-            Hava durumu alınamadı.
+          {overviewStatus === 'ready' && overview !== null && (
+            <View style={styles.forecastSection}>
+              <NextRainCard
+                nextRain={overview.next_rain}
+                timezone={overview.timezone ?? ''}
+                forecastCurrent={refreshStatus === 'idle' && fetchedAt !== null}
+              />
+
+              <HourlyForecast
+                hourly={overview.hourly}
+                rainStartTime={overview.next_rain?.start_time ?? null}
+              />
+
+              <DailyForecast daily={overview.daily} />
+            </View>
+          )}
+
+          <Text
+            style={[styles.status, { color: theme.text }]}
+            accessibilityLiveRegion="polite"
+          >
+            {(() => {
+              const hasValidOverview = overviewStatus === 'ready' && overview !== null;
+
+              if (hasValidOverview && refreshStatus === 'idle') {
+                return 'Backend: Bağlı';
+              }
+
+              if (hasValidOverview && refreshStatus === 'loading') {
+                return `Bağlantı kontrol ediliyor...${formatLastUpdate(fetchedAt)}`;
+              }
+
+              if (hasValidOverview && refreshStatus === 'error') {
+                return `Backend: Bağlantı yok${formatLastUpdate(fetchedAt)}`;
+              }
+
+              if (overviewStatus === 'error') {
+                return 'Backend: Bağlantı Yok';
+              }
+
+              return 'Backend kontrol ediliyor...';
+            })()}
           </Text>
-          <Button title="Tekrar Dene" onPress={() => void refresh()} />
-        </View>
-      )}
-      {overviewStatus === 'ready' && overview !== null && (
-        <CurrentWeatherCard current={overview.current} fetchedAt={fetchedAt} />
-      )}
-
-      {overviewStatus === 'ready' && overview !== null && (
-        <NextRainCard
-          nextRain={overview.next_rain}
-          timezone={overview.timezone ?? ''}
-          forecastCurrent={refreshStatus === 'idle' && fetchedAt !== null}
-        />
-      )}
-
-      {overviewStatus === 'ready' && overview !== null && (
-        <HourlyForecast
-          hourly={overview.hourly}
-          rainStartTime={overview.next_rain?.start_time ?? null}
-        />
-      )}
-
-      {overviewStatus === 'ready' && overview !== null && (
-        <DailyForecast daily={overview.daily} />
-      )}
-
-      <Text style={styles.status} accessibilityLiveRegion="polite">
-        {(() => {
-          const hasValidOverview = overviewStatus === 'ready' && overview !== null;
-
-          if (hasValidOverview && refreshStatus === 'idle') {
-            return 'Backend: Bağlı';
-          }
-
-          if (hasValidOverview && refreshStatus === 'loading') {
-            return `Bağlantı kontrol ediliyor...${formatLastUpdate(fetchedAt)}`;
-          }
-
-          if (hasValidOverview && refreshStatus === 'error') {
-            return `Backend: Bağlantı yok${formatLastUpdate(fetchedAt)}`;
-          }
-
-          if (overviewStatus === 'error') {
-            return 'Backend: Bağlantı Yok';
-          }
-
-          return 'Backend kontrol ediliyor...';
-        })()}
-      </Text>
-      <StatusBar style="auto" />
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </WeatherSurface>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
   },
   container: {
     flexGrow: 1,
-    backgroundColor: '#fff',
+    alignItems: 'stretch',
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 36,
+  },
+  header: {
+    width: '100%',
+    minHeight: 44,
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 24,
-    paddingBottom: 40,
+    marginBottom: 12,
+  },
+  brandMark: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  brandLetter: {
+    fontSize: 16,
+    fontWeight: '700',
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 12,
+    fontSize: 21,
+    fontWeight: '700',
   },
   loadingStatus: {
     marginVertical: 32,
-    color: '#555',
   },
   errorState: {
     alignItems: 'center',
     gap: 12,
     marginVertical: 32,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
   },
-  errorText: {
-    color: '#b91c1c',
+  forecastSection: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: -18,
+    marginTop: 4,
+    paddingHorizontal: 18,
+    paddingTop: 2,
+    paddingBottom: 20,
   },
   status: {
-    marginTop: 32,
+    marginTop: 20,
     fontSize: 12,
-    color: '#999',
   },
 });
