@@ -4,6 +4,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.weather.open_meteo import OPEN_METEO_REQUEST_TIMEOUT_SECONDS
 
 client = TestClient(app)
 
@@ -65,7 +66,7 @@ def test_search_locations_normal_query():
         "format": "json",
         "countryCode": "TR",
     }
-    assert kwargs["timeout"] == 10.0
+    assert kwargs["timeout"] == OPEN_METEO_REQUEST_TIMEOUT_SECONDS
 
 
 def test_search_locations_empty_results():

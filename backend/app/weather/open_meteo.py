@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -21,6 +22,40 @@ from app.weather.rain import find_next_rain_event, find_rain_events
 
 OPEN_METEO_FORECAST_BASE_URL = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_GEOCODING_BASE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+OPEN_METEO_TIMEOUT_ENV_VAR = "WEATHER_OPEN_METEO_TIMEOUT_SECONDS"
+OPEN_METEO_DEFAULT_TIMEOUT_SECONDS = 10.0
+OPEN_METEO_VERCEL_TIMEOUT_SECONDS = 6.0
+
+
+def _configured_open_meteo_timeout_seconds() -> float:
+    """Resolve and validate the provider timeout for this runtime environment."""
+    is_vercel = os.getenv("VERCEL") == "1"
+    max_timeout = (
+        OPEN_METEO_VERCEL_TIMEOUT_SECONDS
+        if is_vercel
+        else OPEN_METEO_DEFAULT_TIMEOUT_SECONDS
+    )
+    configured_timeout = os.getenv(OPEN_METEO_TIMEOUT_ENV_VAR)
+    if configured_timeout is None:
+        return max_timeout
+
+    try:
+        timeout = float(configured_timeout)
+    except ValueError:
+        raise ValueError(
+            f"{OPEN_METEO_TIMEOUT_ENV_VAR} must be a finite number greater than 0 "
+            f"and no more than {max_timeout:g} seconds"
+        ) from None
+
+    if not math.isfinite(timeout) or not 0 < timeout <= max_timeout:
+        raise ValueError(
+            f"{OPEN_METEO_TIMEOUT_ENV_VAR} must be a finite number greater than 0 "
+            f"and no more than {max_timeout:g} seconds"
+        )
+    return timeout
+
+
+OPEN_METEO_REQUEST_TIMEOUT_SECONDS = _configured_open_meteo_timeout_seconds()
 ELAZIG_LATITUDE = 38.6743
 ELAZIG_LONGITUDE = 39.2232
 ELAZIG_LOCATION = "Elazığ"
@@ -330,7 +365,11 @@ def _request_json(
     error_context: str,
 ) -> dict[str, Any]:
     try:
-        response = httpx.get(url, params=params, timeout=10.0)
+        response = httpx.get(
+            url,
+            params=params,
+            timeout=OPEN_METEO_REQUEST_TIMEOUT_SECONDS,
+        )
         response.raise_for_status()
     except httpx.HTTPError as exc:
         raise WeatherFetchError(f"{error_context}: {exc}") from exc

@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 from unittest import mock
@@ -119,6 +120,15 @@ def test_render_proxy_and_health_check_policy_is_explicit():
     assert "--forwarded-allow-ips" not in contents
     assert "WEATHER_ENFORCE_HTTPS" not in contents
     assert "healthCheckPath: /health" in contents
+
+
+def test_vercel_entrypoint_and_duration_budget_are_explicit():
+    backend_root = Path(__file__).parents[1]
+    config = json.loads((backend_root / "vercel.json").read_text(encoding="utf-8"))
+    project = (backend_root / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert config["functions"]["app/main.py"]["maxDuration"] == 8
+    assert 'entrypoint = "app.main:app"' in project
 
 
 def test_forwarded_proto_does_not_cause_app_level_https_redirects():
