@@ -86,8 +86,11 @@ scope. The account's actual plan and live quota consumption could not be
 independently confirmed. Vercel's current Hobby documentation describes a
 free personal-use plan with 1,000,000 Function invocations and 100 GB of Fast
 Data Transfer included; over-limit Hobby usage is restricted until its usage
-window resets rather than automatically becoming a paid plan. No paid plan,
-resource, or deployment was created for this preparation.
+window resets rather than automatically becoming a paid plan. Creating Draft
+PR #30 automatically triggered the connected Vercel integration to create a
+preview deployment in `iad1`; no production deployment or region change was
+made. No paid plan was selected. The team's actual plan and this preview's
+quota/billing impact remain unverified because the team scope returned 403.
 
 The live function currently runs in `iad1` and returned these measured times
 from the current client. Frankfurt (`fra1`) is geographically closer to
