@@ -24,6 +24,7 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
+    "android:release": "node scripts/android-release.js",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",

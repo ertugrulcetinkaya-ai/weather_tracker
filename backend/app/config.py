@@ -14,7 +14,6 @@ class Settings:
     app_name: str = "Weather Tracker API"
     app_version: str = "1.1.0"
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
-    enforce_https: bool = False
     api_requests_per_minute: int | None = None
 
     @classmethod
@@ -25,11 +24,6 @@ class Settings:
             if raw_origins is None
             else tuple(origin.strip() for origin in raw_origins.split(",") if origin.strip())
         )
-        enforce_https = os.getenv("WEATHER_ENFORCE_HTTPS", "false").lower() in {
-            "1",
-            "true",
-            "yes",
-        }
         raw_rate_limit = os.getenv("WEATHER_API_RATE_LIMIT_PER_MINUTE")
         rate_limit = None
         if raw_rate_limit is not None:
@@ -46,6 +40,5 @@ class Settings:
 
         return cls(
             cors_origins=origins,
-            enforce_https=enforce_https,
             api_requests_per_minute=rate_limit,
         )

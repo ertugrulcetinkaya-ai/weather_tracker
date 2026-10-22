@@ -1,6 +1,28 @@
 const { withAndroidManifest, withAppBuildGradle } = require('expo/config-plugins');
 
 const CLEAR_TEXT_PLACEHOLDER = '${weatherTrackerUsesCleartextTraffic}';
+const RELEASE_API_URL_VALIDATION_TASK = 'verifyWeatherTrackerReleaseApiUrl';
+
+const RELEASE_API_URL_VALIDATION = `
+// Weather Tracker release artifacts require a public HTTPS API URL.
+def weatherTrackerReleaseApiUrlValidation = tasks.register("${RELEASE_API_URL_VALIDATION_TASK}") {
+    doLast {
+        def validation = new ProcessBuilder(
+            "node",
+            "-e",
+            "require('./src/api/resolveBaseUrl').resolveApiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL, false)"
+        ).directory(rootProject.projectDir.parentFile).inheritIO().start()
+        if (validation.waitFor() != 0) {
+            throw new GradleException("Release builds require EXPO_PUBLIC_API_BASE_URL to be a valid public HTTPS URL.")
+        }
+    }
+}
+tasks.configureEach { task ->
+    if (task.name != "${RELEASE_API_URL_VALIDATION_TASK}" && task.name.toLowerCase().contains("release")) {
+        task.dependsOn(weatherTrackerReleaseApiUrlValidation)
+    }
+}
+`.trim();
 
 function findBlock(lines, name, start = 0, end = lines.length) {
   const blockLine = new RegExp(`^([\\t ]*)${name}\\s*\\{[\\t ]*$`);
@@ -75,6 +97,10 @@ function applyGradlePolicy(contents) {
     }
     return lines;
   });
+
+  if (!updated.includes(RELEASE_API_URL_VALIDATION_TASK)) {
+    updated = `${updated.trimEnd()}\n\n${RELEASE_API_URL_VALIDATION}\n`;
+  }
 
   return updated;
 }

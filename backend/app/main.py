@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections import OrderedDict, deque
+from ipaddress import ip_address
 from math import ceil
 from threading import Lock
 from time import monotonic
@@ -9,7 +10,7 @@ from typing import Optional
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 
 from app.config import Settings
 from app.weather.models import (
@@ -35,6 +36,20 @@ from app.weather.rain import find_rain_events
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _request_client_id(request: Request) -> str:
+    # Render's public web-service edge overwrites CF-Connecting-IP with the
+    # visitor address. Do not use X-Forwarded-For: its leftmost value is
+    # caller-controlled when proxies append rather than replace the chain.
+    client_ip_headers = request.headers.getlist("cf-connecting-ip")
+    if len(client_ip_headers) == 1:
+        try:
+            return str(ip_address(client_ip_headers[0].strip()))
+        except ValueError:
+            pass
+
+    return request.client.host if request.client is not None else "unknown"
 
 
 class _SlidingWindowRateLimiter:
@@ -203,16 +218,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     @application.middleware("http")
     async def limit_public_api_requests(request: Request, call_next):
         path = request.url.path
-        if resolved.enforce_https and request.url.scheme != "https" and path != "/health":
-            return RedirectResponse(str(request.url.replace(scheme="https")), status_code=307)
-
         is_provider_endpoint = path.startswith("/weather/") or path == "/locations/search"
         if not is_provider_endpoint:
             return await call_next(request)
 
         if rate_limiter is not None:
-            client_id = request.client.host if request.client is not None else "unknown"
-            allowed, retry_after = rate_limiter.allow(client_id)
+            allowed, retry_after = rate_limiter.allow(_request_client_id(request))
             if not allowed:
                 return JSONResponse(
                     status_code=429,

@@ -2,38 +2,17 @@ const DEVELOPMENT_DEFAULT_API_URL = 'http://127.0.0.1:8000';
 
 function isNonPublicHost(hostname) {
   const host = hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
-  const isIPv6Address = host.includes(':');
+  const isIpLiteral = host.includes(':') || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
   if (
     host === 'localhost' ||
     host.endsWith('.localhost') ||
     host.endsWith('.local') ||
-    (isIPv6Address &&
-      (host === '::' ||
-        host === '::1' ||
-        host.startsWith('fc') ||
-        host.startsWith('fd') ||
-        /^fe[89ab]/.test(host)))
+    isIpLiteral
   ) {
     return true;
   }
 
-  const octets = host.split('.').map(Number);
-  if (
-    octets.length !== 4 ||
-    octets.some((octet, index) => !/^\d{1,3}$/.test(host.split('.')[index]) || octet > 255)
-  ) {
-    return false;
-  }
-
-  const [first, second] = octets;
-  return (
-    first === 0 ||
-    first === 10 ||
-    first === 127 ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168)
-  );
+  return false;
 }
 
 function resolveApiBaseUrl(configuredUrl, isDevelopment) {

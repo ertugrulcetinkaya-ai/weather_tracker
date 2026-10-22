@@ -2,7 +2,19 @@ const baseConfig = require('./app.json').expo;
 const { resolveApiBaseUrl } = require('./src/api/resolveBaseUrl');
 
 function isReleaseBuild(environment) {
-  return environment.APP_ENV === 'production' || environment.EAS_BUILD_PROFILE === 'production';
+  if (environment.APP_ENV === 'production' || environment.EAS_BUILD_PROFILE === 'production') {
+    return true;
+  }
+
+  if (environment.EAS_BUILD_PROFILE === 'development') {
+    return false;
+  }
+
+  if (environment.NODE_ENV === 'production') return true;
+
+  if (environment.APP_ENV === 'development') return false;
+
+  return false;
 }
 
 function configureExpoConfig(config = baseConfig, environment = process.env) {

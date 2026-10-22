@@ -6,10 +6,10 @@ This change prepares configuration and checks. It does not create a hosting acco
 
 | Priority | Finding | R1 status |
 | --- | --- | --- |
-| P0 | The mobile API URL silently fell back to `http://127.0.0.1:8000`, including release bundles. | Release config now requires a public HTTPS URL and rejects missing, HTTP, malformed, or localhost URLs. Development retains localhost and LAN HTTP support. |
+| P0 | The mobile API URL silently fell back to `http://127.0.0.1:8000`, including release bundles. | Release config now requires HTTPS with a DNS hostname and rejects missing, HTTP, malformed, localhost, or IP-literal URLs. Development retains localhost and LAN HTTP support. |
 | P0 | Android had no pinned `applicationId` or `versionCode`; no release signing credentials were present in the repository. | A fixed ID and initial version code are configured. A permanent release keystore still has to be created or selected by the owner; R1 does not generate one. |
-| P0 | There was no deployment definition or app-side HTTPS requirement. | `render.yaml` describes a continuously running Frankfurt service, `/health`, platform TLS, HTTPS enforcement, and startup command. It is not applied to a live account. |
-| P1 | Public weather and geocoding endpoints had no request limit; upstream failures could be returned and logged with provider details. | A per-client 60-request/minute in-process limit returns 429. Provider failures now return a generic 502 and logs omit exception/query details. |
+| P0 | There was no deployment definition or HTTPS ingress policy. | `render.yaml` describes a continuously running Frankfurt service and `/health`; Render's edge provides TLS and HTTP-to-HTTPS redirects. It is not applied to a live account. |
+| P1 | Public weather and geocoding endpoints had no request limit; upstream failures could be returned and logged with provider details. | A 60-request/minute in-process limit returns 429 per validated Render client IP or, without that header, the direct TCP peer. Provider failures return a generic 502 and logs omit exception/query details. |
 | P1 | Weather endpoints are intentionally unauthenticated because the mobile client is public and a bundled key is not an access control. | The backend applies a bounded request rate and validates coordinates/search lengths. Before multi-instance scaling, move limits to a shared store or edge layer. |
 | P2 | There is no external error tracker or uptime notification configured. | Render dashboard logs, metrics, restart handling, and deployment health checks are available; external alerting remains an account-level follow-up. |
 
@@ -36,10 +36,10 @@ Open-Meteo requests already have a 10-second timeout. Latitude, longitude, locat
 The root `render.yaml` is an infrastructure blueprint only. When R2 is approved, connect the GitHub repository and create the web service from that blueprint. It uses:
 
 ```sh
-uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --proxy-headers --forwarded-allow-ips='*' --no-access-log
+uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --no-proxy-headers --no-access-log
 ```
 
-Render terminates public TLS at its load balancer and forwards the trusted scheme to Uvicorn. The application redirects non-HTTPS weather/API routes as a second check. The health endpoint stays transport-neutral for platform probes. The in-process limiter depends on the forwarded client address and assumes only the hosting provider's ingress can reach the service port; keep the service behind provider ingress and on one worker/instance unless rate-limit state is moved to shared storage or an edge limiter.
+Render terminates TLS at its public edge and redirects HTTP there; the app does not make a second redirect from its internal HTTP hop. Uvicorn ignores `X-Forwarded-For` and `X-Forwarded-Proto`. For public Render ingress, the limiter uses the valid single-IP `CF-Connecting-IP` value that Cloudflare overwrites with the visitor address. Without it, the limiter falls back to the TCP peer. Do not expose the process outside Render's public web-service ingress. The limit is in memory and per process; keep one process/instance or move the quota to shared storage or a trusted edge limiter before scaling.
 
 No API key is placed in the mobile bundle. Weather data and location search are public upstream reads. The 60/minute limit is a low-cost abuse guard, not user authentication or a DDoS service.
 
@@ -47,20 +47,20 @@ No API key is placed in the mobile bundle. Weather data and location search are 
 
 Use the actual generated `onrender.com` hostname or verified custom hostname:
 
-1. Confirm `http://HOST/health` redirects to the HTTPS URL and `https://HOST/health` returns `200` with `{"status":"ok"}`.
+1. Confirm public `http://HOST/health` reaches the HTTPS URL and `https://HOST/health` returns `200` with `{"status":"ok"}`; Render's internal health probe still reaches `/health` over HTTP without an application redirect.
 2. Run `curl -fsS https://HOST/health` and `openssl s_client -connect HOST:443 -servername HOST -verify_return_error`; confirm the chain, hostname, and expiry.
-3. Request a weather route over HTTPS and confirm valid JSON; send HTTP to a weather route and confirm it redirects without invoking Open-Meteo.
+3. Request a weather route over HTTPS and confirm valid JSON; send HTTP to a weather route and confirm Render's edge redirects it without invoking Open-Meteo.
 4. Set `EXPO_PUBLIC_API_BASE_URL=https://HOST` in the EAS production environment, run the production config check, then build the APK only after separately approving that build.
 5. Repeat certificate and endpoint checks after any custom-domain DNS change and after deployment/rollback.
 
-R1 can validate the URL shape and release Android manifest locally, but no real hostname exists yet, so no live TLS validation or production APK is claimed.
+R1 validates production URLs during Expo config resolution and on Android Gradle release tasks generated by the config plugin. Production `APP_ENV` or EAS profile markers force release checks; `NODE_ENV=production` also forces them unless the explicit EAS profile is `development`. The Android project is generated and ignored, so use `npm run android:release` for a local APK: it requires an HTTPS DNS hostname, refreshes Android config plugins with Expo prebuild, then calls `:app:assembleRelease`. The build checks hostname shape but not DNS resolution or TLS reachability; the configured name must resolve publicly and pass the live TLS check after deployment. A raw `gradlew` call against a stale generated directory does not run Expo config plugins. No real hostname exists yet, so no live TLS validation or production APK is claimed.
 
 ## Android identity, signing, and updates
 
 - Android application ID: `com.ertugrulcetinkaya.weathertracker` (pinned in app config). No native Android project, previous release package ID, APK, or `versionCode` was committed, so R1 establishes the first explicit identity; it cannot verify an unpublished/external build.
 - User-facing version: `1.0.0`. Android `versionCode` seed: `1`; EAS production uses a remote version source with `autoIncrement`. Expo initializes the remote value from the local seed and increments it for a build, so the first EAS production APK may use `versionCode` `2`. If a release exists outside this repository, initialize the remote source to its last published code before building; EAS will then increment from that value.
 - Debug and release network policies are variant-specific: Android debug permits HTTP for localhost/LAN development; Android release sets `usesCleartextTraffic=false`.
-- Debug and release signing are separate: Gradle debug uses the Android debug key; the release variant selects `signingConfigs.release`, which EAS fills from the remote production keystore. A local release build without that key must not be used for distribution. Keep the release key permanently and back up/retain access; later APKs must use the same key and application ID to update in place and retain app data.
+- Debug and release signing are separate: Gradle debug uses the Android debug key and release selects `signingConfigs.release`. Expo documents EAS remote signing configuration for Gradle builds, and `eas.json` selects `credentialsSource: remote`; no real remote credential or signed EAS build was available to verify this integration. A local release build without that key must not be used for distribution. Keep the release key permanently and back up/retain access; later APKs must use the same key and application ID to update in place and retain app data.
 - No release keystore, alias, password, or EAS credentials were found or created. Options for R2: let EAS generate and manage a single permanent Android keystore, or create one locally, keep an encrypted offline backup, and upload/store it through EAS credentials. Never commit a keystore, password, or `credentials.json`.
 - A first production APK is an install/update boundary from any locally debug-signed build. Debug and release signatures are intentionally separate; users who installed only debug builds may need a clean transition. Once the first release is signed, preserve the release key and increase `versionCode` for every subsequent release.
 
