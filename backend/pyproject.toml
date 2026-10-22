@@ -1,3 +1,14 @@
+[project]
+name = "weather-tracker-backend"
+version = "0.1.0"
+description = "FastAPI backend for Weather Tracker."
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.116,<1.0",
+    "httpx>=0.28,<1.0",
+    "uvicorn[standard]>=0.35,<1.0",
+]
+
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 testpaths = ["tests"]
