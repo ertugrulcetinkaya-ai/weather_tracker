@@ -22,6 +22,8 @@ previous duplicate hourly fetch and prevents partially updated UI states.
 
 More detail is available in [docs/architecture.md](docs/architecture.md).
 
+Hosting setup and free-tier limits are documented in [docs/r2-free-hosting.md](docs/r2-free-hosting.md).
+
 ## Local development
 
 Requirements: Python 3.9+ and Node.js 22.

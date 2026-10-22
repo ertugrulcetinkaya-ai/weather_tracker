@@ -21,6 +21,7 @@ from app.weather.rain import find_next_rain_event, find_rain_events
 
 OPEN_METEO_FORECAST_BASE_URL = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_GEOCODING_BASE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+OPEN_METEO_REQUEST_TIMEOUT_SECONDS = 6.0
 ELAZIG_LATITUDE = 38.6743
 ELAZIG_LONGITUDE = 39.2232
 ELAZIG_LOCATION = "Elazığ"
@@ -330,7 +331,11 @@ def _request_json(
     error_context: str,
 ) -> dict[str, Any]:
     try:
-        response = httpx.get(url, params=params, timeout=10.0)
+        response = httpx.get(
+            url,
+            params=params,
+            timeout=OPEN_METEO_REQUEST_TIMEOUT_SECONDS,
+        )
         response.raise_for_status()
     except httpx.HTTPError as exc:
         raise WeatherFetchError(f"{error_context}: {exc}") from exc
