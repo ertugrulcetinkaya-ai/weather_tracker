@@ -12,6 +12,7 @@ module.exports = {
     'src/weather/**/*.ts',
     '!src/api/config.ts',
     '!src/**/__tests__/**',
+    '!src/**/*.d.ts',
   ],
   coverageThreshold: {
     global: {

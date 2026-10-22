@@ -198,22 +198,22 @@ export default function App() {
               const hasValidOverview = overviewStatus === 'ready' && overview !== null;
 
               if (hasValidOverview && refreshStatus === 'idle') {
-                return 'Backend: Bağlı';
+                return 'Veriler güncel';
               }
 
               if (hasValidOverview && refreshStatus === 'loading') {
-                return `Bağlantı kontrol ediliyor...${formatLastUpdate(fetchedAt)}`;
+                return `Hava durumu güncelleniyor${formatLastUpdate(fetchedAt)}`;
               }
 
               if (hasValidOverview && refreshStatus === 'error') {
-                return `Backend: Bağlantı yok${formatLastUpdate(fetchedAt)}`;
+                return `Bağlantı yok · Son kaydedilen tahmin${formatLastUpdate(fetchedAt)}`;
               }
 
               if (overviewStatus === 'error') {
-                return 'Backend: Bağlantı Yok';
+                return 'Bağlantı yok';
               }
 
-              return 'Backend kontrol ediliyor...';
+              return 'Hava durumu güncelleniyor';
             })()}
           </Text>
         </ScrollView>

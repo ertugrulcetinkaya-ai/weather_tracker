@@ -80,7 +80,7 @@ def test_hourly_weather_missing_value():
         response = client.get("/weather/hourly")
 
     assert response.status_code == 502
-    assert "missing hourly value" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}
 
 
 def test_fetch_hourly_weather_missing_hourly_time():
@@ -111,7 +111,7 @@ def test_hourly_weather_http_error():
         result = client.get("/weather/hourly")
 
     assert result.status_code == 502
-    assert "Open-Meteo request failed" in result.json()["detail"]
+    assert result.json() == {"detail": "Weather data is temporarily unavailable."}
 
 
 def _hourly_payload_with(field: str, values: list):
@@ -192,7 +192,7 @@ def test_hourly_weather_unrepresentable_float_field_returns_502(field, values):
         response = client.get("/weather/hourly")
 
     assert response.status_code == 502
-    assert "non-finite" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}
 
 
 @pytest.mark.parametrize(

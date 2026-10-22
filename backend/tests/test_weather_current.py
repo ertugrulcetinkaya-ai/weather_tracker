@@ -196,7 +196,7 @@ def test_weather_current_non_integer_humidity_returns_502():
         response = client.get("/weather/current")
 
     assert response.status_code == 502
-    assert "non-integer" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}
 
 
 def _current_payload_with(field: str, values: list) -> dict:
@@ -297,4 +297,4 @@ def test_weather_current_unrepresentable_float_field_returns_502(field, values):
         response = client.get("/weather/current")
 
     assert response.status_code == 502
-    assert "non-finite" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}

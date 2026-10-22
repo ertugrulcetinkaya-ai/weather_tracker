@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict, deque
+from math import ceil
+from threading import Lock
+from time import monotonic
 from typing import Optional
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.config import Settings
 from app.weather.models import (
@@ -31,6 +35,46 @@ from app.weather.rain import find_rain_events
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+class _SlidingWindowRateLimiter:
+    MAX_TRACKED_CLIENTS = 4096
+
+    def __init__(self, limit: int, window_seconds: int = 60) -> None:
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self._requests: OrderedDict[str, deque[float]] = OrderedDict()
+        self._last_cleanup = monotonic()
+        self._lock = Lock()
+
+    def allow(self, client_id: str) -> tuple[bool, int]:
+        now = monotonic()
+        cutoff = now - self.window_seconds
+        with self._lock:
+            if now - self._last_cleanup >= self.window_seconds:
+                for key, timestamps in tuple(self._requests.items()):
+                    while timestamps and timestamps[0] <= cutoff:
+                        timestamps.popleft()
+                    if not timestamps:
+                        del self._requests[key]
+                self._last_cleanup = now
+
+            timestamps = self._requests.get(client_id)
+            if timestamps is None:
+                if len(self._requests) >= self.MAX_TRACKED_CLIENTS:
+                    self._requests.popitem(last=False)
+                timestamps = deque()
+                self._requests[client_id] = timestamps
+            else:
+                self._requests.move_to_end(client_id)
+            while timestamps and timestamps[0] <= cutoff:
+                timestamps.popleft()
+            if len(timestamps) >= self.limit:
+                retry_after = max(1, ceil(self.window_seconds - (now - timestamps[0])))
+                return False, retry_after
+
+            timestamps.append(now)
+            return True, 0
 
 
 def _validate_coords(
@@ -141,6 +185,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         version=resolved.app_version,
         description="Weather data optimized for the Weather Tracker mobile client.",
     )
+    rate_limiter = (
+        _SlidingWindowRateLimiter(resolved.api_requests_per_minute)
+        if resolved.api_requests_per_minute is not None
+        else None
+    )
+
     if resolved.cors_origins:
         application.add_middleware(
             CORSMiddleware,
@@ -150,13 +200,41 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             allow_headers=["*"],
         )
 
+    @application.middleware("http")
+    async def limit_public_api_requests(request: Request, call_next):
+        path = request.url.path
+        if resolved.enforce_https and request.url.scheme != "https" and path != "/health":
+            return RedirectResponse(str(request.url.replace(scheme="https")), status_code=307)
+
+        is_provider_endpoint = path.startswith("/weather/") or path == "/locations/search"
+        if not is_provider_endpoint:
+            return await call_next(request)
+
+        if rate_limiter is not None:
+            client_id = request.client.host if request.client is not None else "unknown"
+            allowed, retry_after = rate_limiter.allow(client_id)
+            if not allowed:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Too many requests. Please try again shortly."},
+                    headers={"Retry-After": str(retry_after)},
+                )
+        return await call_next(request)
+
     @application.exception_handler(WeatherFetchError)
     async def weather_fetch_error_handler(
         request: Request,
         exc: WeatherFetchError,
     ) -> JSONResponse:
-        logger.warning("Weather provider failure on %s: %s", request.url.path, exc)
-        return JSONResponse(status_code=502, content={"detail": str(exc)})
+        logger.warning(
+            "Weather provider request failed on %s (%s)",
+            request.url.path,
+            type(exc).__name__,
+        )
+        return JSONResponse(
+            status_code=502,
+            content={"detail": "Weather data is temporarily unavailable."},
+        )
 
     application.include_router(router)
     return application
