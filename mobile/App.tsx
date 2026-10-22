@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   forecastSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
     marginHorizontal: -18,
     marginTop: 4,
     paddingHorizontal: 18,

@@ -51,7 +51,7 @@ describe('HourlyForecast', () => {
     expect(getByTestId('hourly-weather-icon-rain-1', { includeHiddenElements: true })).toBeTruthy();
   });
 
-  it('keeps the forecast heading readable on the white page in the rainy theme', async () => {
+  it('keeps forecast headings and scroll guidance readable on the dark rainy surface', async () => {
     const { getByText } = await render(
       <HourlyForecast
         hourly={[
@@ -62,8 +62,8 @@ describe('HourlyForecast', () => {
       />,
     );
 
-    expect(StyleSheet.flatten(getByText('24 Saatlik Tahmin').props.style).color).toBe('#15324D');
-    expect(StyleSheet.flatten(getByText('Yatay kaydırın →').props.style).color).toBe('#526B80');
+    expect(StyleSheet.flatten(getByText('24 Saatlik Tahmin').props.style).color).toBe('#F2F7FC');
+    expect(StyleSheet.flatten(getByText('Yatay kaydırın →').props.style).color).toBe('#BFD0DE');
   });
 
   it('renders all 24 records and connects every adjacent temperature sample', async () => {

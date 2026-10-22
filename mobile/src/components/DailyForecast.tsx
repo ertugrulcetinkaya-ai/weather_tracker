@@ -148,16 +148,13 @@ function buildAccessibilityLabel(
 
 export function DailyForecast({ daily, theme }: DailyForecastProps) {
   const resolvedTheme = theme ?? getWeatherTheme(daily[0]?.weather_code);
-  // The forecast section sits on a white surface even when rainy cards are dark.
-  const titleColor = resolvedTheme.kind === 'rainy' ? '#253849' : resolvedTheme.text;
-  const emptyStateColor = resolvedTheme.kind === 'rainy' ? '#526879' : resolvedTheme.mutedText;
   const temperatureScale = getDailyTemperatureScale(daily);
 
   return (
     <View style={styles.section}>
       <Text
         allowFontScaling
-        style={[styles.dailyTitle, { color: titleColor }]}
+        style={[styles.dailyTitle, { color: resolvedTheme.text }]}
       >
         7 Günlük Tahmin
       </Text>
@@ -165,12 +162,20 @@ export function DailyForecast({ daily, theme }: DailyForecastProps) {
         <Text
           allowFontScaling
           testID="daily-forecast-empty-state"
-          style={[styles.emptyState, { color: emptyStateColor }]}
+          style={[styles.emptyState, { color: resolvedTheme.mutedText }]}
         >
           7 günlük tahmin bulunmuyor.
         </Text>
       ) : (
-        <View style={styles.dailyList}>
+        <View
+          style={[
+            styles.dailyList,
+            {
+              backgroundColor: resolvedTheme.surface,
+              borderColor: resolvedTheme.surfaceBorder,
+            },
+          ]}
+        >
           {daily.map((day, index) => {
             const condition = getWeatherCondition(day.weather_code);
             const glyphKind = getWeatherGlyphKind(day.weather_code);
@@ -197,6 +202,7 @@ export function DailyForecast({ daily, theme }: DailyForecastProps) {
                   {
                     backgroundColor: resolvedTheme.surface,
                     borderColor: resolvedTheme.surfaceBorder,
+                    borderBottomWidth: index < daily.length - 1 ? StyleSheet.hairlineWidth : 0,
                   },
                 ]}
               >
@@ -309,15 +315,15 @@ const styles = StyleSheet.create({
   },
   dailyList: {
     width: '100%',
-    gap: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
   dailyCard: {
     width: '100%',
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingVertical: 12,
+    paddingVertical: 9,
     paddingHorizontal: 14,
-    gap: 10,
+    gap: 8,
   },
   dailyTopRow: {
     width: '100%',

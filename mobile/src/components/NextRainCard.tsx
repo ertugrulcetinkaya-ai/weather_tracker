@@ -22,7 +22,7 @@ type NextRainCardProps = {
   theme?: WeatherTheme;
 };
 
-function PrecipitationMark({ color }: { color: string }) {
+function PrecipitationMark({ cloudColor, accentColor }: { cloudColor: string; accentColor: string }) {
   return (
     <View
       accessible={false}
@@ -30,9 +30,13 @@ function PrecipitationMark({ color }: { color: string }) {
       importantForAccessibility="no-hide-descendants"
       style={styles.precipitationMark}
     >
-      <View style={[styles.markBar, styles.markBarShort, { backgroundColor: color }]} />
-      <View style={[styles.markBar, styles.markBarMedium, { backgroundColor: color }]} />
-      <View style={[styles.markBar, styles.markBarTall, { backgroundColor: color }]} />
+      <View style={[styles.cloudPuff, styles.cloudPuffLeft, { backgroundColor: cloudColor }]} />
+      <View style={[styles.cloudPuff, styles.cloudPuffTop, { backgroundColor: cloudColor }]} />
+      <View style={[styles.cloudPuff, styles.cloudPuffRight, { backgroundColor: cloudColor }]} />
+      <View style={[styles.cloudBase, { backgroundColor: cloudColor }]} />
+      <View style={[styles.precipitationDot, styles.precipitationDotLeft, { backgroundColor: accentColor }]} />
+      <View style={[styles.precipitationDot, styles.precipitationDotMiddle, { backgroundColor: accentColor }]} />
+      <View style={[styles.precipitationDot, styles.precipitationDotRight, { backgroundColor: accentColor }]} />
     </View>
   );
 }
@@ -120,13 +124,12 @@ export function NextRainCard({
           `Başlangıç ${formatHour(nextRain.start_time)}, bitiş ${formatHour(nextRain.end_time)}; seçili şehrin yerel saati.`,
           `Toplam ${formatPrecipitation(nextRain.total_precipitation)} mm.`,
           `En yoğun saat ${formatHour(nextRain.peak_time)}.`,
+          'Yağış türü belirtilmiyor.',
         ].join(' ');
-
-  const sectionTitleColor = theme.kind === 'rainy' ? '#15324D' : theme.text;
 
   return (
     <>
-      <Text allowFontScaling style={[styles.sectionTitle, { color: sectionTitleColor }]}>
+      <Text allowFontScaling style={[styles.sectionTitle, { color: theme.text }]}>
         Sıradaki Yağış
       </Text>
       <View
@@ -142,103 +145,73 @@ export function NextRainCard({
           },
         ]}
       >
-        <View style={styles.statusHeading}>
+        <View style={styles.contentRow}>
           <View style={[styles.iconBadge, { backgroundColor: theme.accentSoft }]}>
-            <PrecipitationMark color={theme.accent} />
+            <PrecipitationMark cloudColor={theme.mutedText} accentColor={theme.accent} />
           </View>
-          <Text allowFontScaling style={[styles.eyebrow, { color: theme.mutedText }]}>
-            {nextRain === null
-              ? 'ÖNÜMÜZDEKİ 24 SAAT'
-              : forecastCurrent
-                ? 'SIRADAKİ YAĞIŞ'
-                : 'SON KAYDEDİLEN TAHMİN'}
-          </Text>
-        </View>
+          <View style={styles.details}>
+            {nextRain !== null && (
+              <View style={styles.timeRangeCompact}>
+                <Text
+                  testID="rain-start-time"
+                  allowFontScaling
+                  style={[styles.timeValue, { color: theme.mutedText }]}
+                >
+                  {formatHour(nextRain.start_time)}
+                </Text>
+                <Text allowFontScaling style={[styles.rangeSeparator, { color: theme.mutedText }]}>–</Text>
+                <Text
+                  testID="rain-end-time"
+                  allowFontScaling
+                  style={[styles.timeValue, { color: theme.mutedText }]}
+                >
+                  {formatHour(nextRain.end_time)}
+                </Text>
+                <Text allowFontScaling style={[styles.localTimeHint, { color: theme.mutedText }]}>· Yerel saat</Text>
+              </View>
+            )}
 
-        <Text
-          testID="next-rain-status"
-          allowFontScaling
-          style={[
-            styles.status,
-            { color: theme.text },
-            nextRain === null && styles.noRainStatus,
-          ]}
-        >
-          {statusText}
-        </Text>
+            <Text
+              testID="next-rain-status"
+              allowFontScaling
+              style={[styles.status, { color: theme.text }]}
+            >
+              {statusText}
+            </Text>
 
-        {freshnessNote !== null && (
-          <Text allowFontScaling style={[styles.freshnessNote, { color: theme.mutedText }]}>
-            {freshnessNote}
-          </Text>
-        )}
-
-        {nextRain !== null && (
-          <>
-            <View style={[styles.separator, { backgroundColor: theme.surfaceBorder }]} />
-
-            <View style={[styles.timeRange, { backgroundColor: theme.accentSoft }]}>
-              <Text allowFontScaling style={[styles.localTimeHint, { color: theme.mutedText }]}>
-                Seçili şehrin yerel saati
+            {freshnessNote !== null && (
+              <Text allowFontScaling style={[styles.freshnessNote, { color: theme.mutedText }]}>
+                {freshnessNote}
               </Text>
-              <View style={styles.timeColumns}>
-                <View style={styles.timeColumn}>
-                  <Text allowFontScaling style={[styles.detailLabel, { color: theme.mutedText }]}>
-                    BAŞLANGIÇ
-                  </Text>
-                  <Text
-                    testID="rain-start-time"
-                    allowFontScaling
-                    style={[styles.timeValue, { color: theme.text }]}
-                  >
-                    {formatHour(nextRain.start_time)}
-                  </Text>
-                </View>
-                <View style={[styles.timeDivider, { backgroundColor: theme.surfaceBorder }]} />
-                <View style={styles.timeColumn}>
-                  <Text allowFontScaling style={[styles.detailLabel, { color: theme.mutedText }]}>
-                    BİTİŞ
-                  </Text>
-                  <Text
-                    testID="rain-end-time"
-                    allowFontScaling
-                    style={[styles.timeValue, { color: theme.text }]}
-                  >
-                    {formatHour(nextRain.end_time)}
-                  </Text>
-                </View>
-              </View>
-            </View>
+            )}
 
-            <View style={styles.metrics}>
-              <View style={styles.metric}>
-                <Text allowFontScaling style={[styles.detailLabel, { color: theme.mutedText }]}>
-                  TOPLAM YAĞIŞ
+            {nextRain !== null && (
+              <>
+                <View style={styles.metrics}>
+                  <Text allowFontScaling style={[styles.metricValue, { color: theme.mutedText }]}>Toplam </Text>
+                  <Text
+                    testID="rain-total"
+                    allowFontScaling
+                    style={[styles.metricValue, { color: theme.mutedText }]}
+                  >
+                    {formatPrecipitation(nextRain.total_precipitation)} mm
+                  </Text>
+                  <Text allowFontScaling style={[styles.metricValue, { color: theme.mutedText }]}> · En yoğun </Text>
+                  <Text
+                    testID="rain-peak-time"
+                    allowFontScaling
+                    style={[styles.metricValue, { color: theme.mutedText }]}
+                  >
+                    {formatHour(nextRain.peak_time)}
+                  </Text>
+                </View>
+                <Text allowFontScaling style={[styles.typeNote, { color: theme.mutedText }]}>
+                  Yağış türü belirtilmiyor.
                 </Text>
-                <Text
-                  testID="rain-total"
-                  allowFontScaling
-                  style={[styles.metricValue, { color: theme.text }]}
-                >
-                  {formatPrecipitation(nextRain.total_precipitation)} mm
-                </Text>
-              </View>
-              <View style={[styles.metricDivider, { backgroundColor: theme.surfaceBorder }]} />
-              <View style={styles.metric}>
-                <Text allowFontScaling style={[styles.detailLabel, { color: theme.mutedText }]}>
-                  EN YOĞUN SAAT
-                </Text>
-                <Text
-                  testID="rain-peak-time"
-                  allowFontScaling
-                  style={[styles.metricValue, { color: theme.text }]}
-                >
-                  {formatHour(nextRain.peak_time)}
-                </Text>
-              </View>
-            </View>
-          </>
-        )}
+              </>
+            )}
+          </View>
+        </View>
       </View>
     </>
   );
@@ -255,13 +228,13 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 20,
     borderWidth: 1,
-    padding: 16,
+    padding: 12,
     marginBottom: 8,
   },
-  statusHeading: {
+  contentRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    alignItems: 'flex-start',
+    gap: 12,
   },
   iconBadge: {
     width: 44,
@@ -269,98 +242,58 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   precipitationMark: {
-    height: 19,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 3,
+    position: 'relative',
+    width: 30,
+    height: 28,
   },
-  markBar: { width: 3, borderRadius: 2 },
-  markBarShort: { height: 7 },
-  markBarMedium: { height: 12 },
-  markBarTall: { height: 17 },
-  eyebrow: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.7,
-  },
-  status: {
-    flexShrink: 1,
-    fontSize: 26,
-    lineHeight: 33,
-    fontWeight: '700',
-    marginTop: 12,
-  },
-  noRainStatus: {
-    fontSize: 18,
-    lineHeight: 25,
-  },
-  freshnessNote: {
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 6,
-  },
-  separator: {
-    height: 1,
-    marginTop: 16,
-    marginBottom: 14,
-  },
-  timeRange: {
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  localTimeHint: {
-    fontSize: 12,
-    lineHeight: 17,
-    marginBottom: 7,
-  },
-  timeColumns: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  timeColumn: {
+  cloudPuff: { position: 'absolute', borderRadius: 10 },
+  cloudPuffLeft: { left: 3, top: 10, width: 13, height: 12 },
+  cloudPuffTop: { left: 9, top: 4, width: 17, height: 17 },
+  cloudPuffRight: { left: 17, top: 9, width: 11, height: 12 },
+  cloudBase: { position: 'absolute', left: 3, top: 13, width: 25, height: 9, borderRadius: 6 },
+  precipitationDot: { position: 'absolute', top: 24, width: 3, height: 3, borderRadius: 2 },
+  precipitationDotLeft: { left: 8 },
+  precipitationDotMiddle: { left: 15 },
+  precipitationDotRight: { left: 22 },
+  details: {
     flex: 1,
     minWidth: 0,
+    justifyContent: 'center',
   },
-  timeDivider: {
-    width: 1,
-    marginHorizontal: 12,
+  timeRangeCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    columnGap: 3,
+    rowGap: 1,
   },
-  detailLabel: {
-    flexShrink: 1,
+  rangeSeparator: { fontSize: 12, lineHeight: 17 },
+  localTimeHint: { fontSize: 11, lineHeight: 17, marginLeft: 3 },
+  status: {
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  freshnessNote: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  timeValue: {
     fontSize: 12,
     lineHeight: 17,
     fontWeight: '600',
-    letterSpacing: 0.35,
-  },
-  timeValue: {
-    flexShrink: 1,
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: '700',
-    marginTop: 2,
   },
   metrics: {
     flexDirection: 'row',
-    alignItems: 'stretch',
-    marginTop: 14,
-  },
-  metric: {
-    flex: 1,
-    minWidth: 0,
-  },
-  metricDivider: {
-    width: 1,
-    marginHorizontal: 12,
-  },
-  metricValue: {
-    flexShrink: 1,
-    fontSize: 18,
-    lineHeight: 25,
-    fontWeight: '700',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     marginTop: 2,
   },
+  metricValue: { fontSize: 12, lineHeight: 17 },
+  typeNote: { fontSize: 11, lineHeight: 15, marginTop: 1 },
 });
