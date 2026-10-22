@@ -71,7 +71,8 @@ describe('NextRainCard', () => {
     expect(getByText('4.5 mm')).toBeTruthy();
     expect(getByTestId('rain-peak-time').props.children).toBe('18:00');
     expect(getByLabelText(/Başlamasına 30 dakika kaldı/)).toBeTruthy();
-    expect(getByText('Seçili şehrin yerel saati')).toBeTruthy();
+    expect(getByText('· Yerel saat')).toBeTruthy();
+    expect(getByText('Yağış türü belirtilmiyor.')).toBeTruthy();
   });
 
   it('calculates the remaining time in a timezone different from Istanbul', async () => {
@@ -289,7 +290,7 @@ describe('NextRainCard', () => {
       rainyTheme.text,
     );
     expect(getByTestId('next-rain-status').props.children).toBe('Yağış devam ediyor.');
-    expect(StyleSheet.flatten(getByText('Sıradaki Yağış').props.style).color).toBe('#15324D');
+    expect(StyleSheet.flatten(getByText('Sıradaki Yağış').props.style).color).toBe(rainyTheme.text);
   });
 
   it('shows that rain has ended when now is after its end', async () => {
@@ -439,7 +440,7 @@ describe('NextRainCard', () => {
     expect(getByTestId('rain-start-time').props.children).toBe('18:00');
     expect(queryByText(/Başlamasına .* kaldı/)).toBeNull();
     expect(getByLabelText(/geri sayım gösterilmiyor/i)).toBeTruthy();
-    expect(getByText('SON KAYDEDİLEN TAHMİN')).toBeTruthy();
+    expect(getByText('Tahmin güncel değil. Geri sayım gösterilmiyor.')).toBeTruthy();
   });
 
   it.each([

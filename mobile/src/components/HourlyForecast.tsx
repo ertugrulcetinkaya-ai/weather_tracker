@@ -32,9 +32,6 @@ export function HourlyForecast({
 }: HourlyForecastProps) {
   const resolvedTheme = theme ?? getWeatherTheme(hourly[0]?.weather_code);
   const palette = getHourlyChartPalette(resolvedTheme);
-  const sectionTextColor = resolvedTheme.kind === 'rainy' ? '#15324D' : resolvedTheme.text;
-  const sectionMutedTextColor =
-    resolvedTheme.kind === 'rainy' ? '#526B80' : resolvedTheme.mutedText;
   const rainStartRecordTime =
     rainStartTime === null ? null : shiftWallClockHour(rainStartTime, 1);
   const firstRainStartIndex =
@@ -53,13 +50,13 @@ export function HourlyForecast({
         <Text
           style={[
             styles.hourlyTitle,
-            { color: sectionTextColor },
+            { color: resolvedTheme.text },
           ]}
         >
           24 Saatlik Tahmin
         </Text>
         {hourly.length > 1 && (
-          <Text accessible={false} style={[styles.scrollHint, { color: sectionMutedTextColor }]}>
+          <Text accessible={false} style={[styles.scrollHint, { color: resolvedTheme.mutedText }]}>
             Yatay kaydırın →
           </Text>
         )}

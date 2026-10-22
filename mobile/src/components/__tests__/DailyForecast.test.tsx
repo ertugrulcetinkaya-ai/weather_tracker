@@ -313,13 +313,13 @@ describe('DailyForecast', () => {
 
     expect(date.props.allowFontScaling).toBe(true);
     expect(StyleSheet.flatten(card.props.style).backgroundColor).toBe('#112C47');
-    expect(StyleSheet.flatten(getByText('7 Günlük Tahmin').props.style).color).toBe('#253849');
+    expect(StyleSheet.flatten(getByText('7 Günlük Tahmin').props.style).color).toBe('#F2F7FC');
     expect(StyleSheet.flatten(date.props.style).color).toBe('#F2F7FC');
 
     const emptyState = await render(<DailyForecast daily={[]} theme={getWeatherTheme(61)} />);
     expect(
       StyleSheet.flatten(emptyState.getByTestId('daily-forecast-empty-state').props.style).color,
-    ).toBe('#526879');
+    ).toBe('#BFD0DE');
   });
 
   it('shows a clear empty state for an empty forecast', async () => {
