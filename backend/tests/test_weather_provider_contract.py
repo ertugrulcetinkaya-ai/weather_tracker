@@ -142,7 +142,7 @@ def test_provider_timezone_is_required():
         response = client.get("/weather/current")
 
     assert response.status_code == 502
-    assert "timezone" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}
 
 
 def test_forecast_request_explicitly_uses_kmh_wind_speed_unit():
@@ -168,4 +168,4 @@ def test_provider_timezone_must_be_a_valid_non_empty_string(timezone_value):
         response = client.get("/weather/current")
 
     assert response.status_code == 502
-    assert "timezone" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}

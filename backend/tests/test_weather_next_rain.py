@@ -158,7 +158,7 @@ def test_next_rain_rejects_missing_25th_hour_with_bad_gateway():
     response, mocked_get = _request_next_rain(payload)
 
     assert response.status_code == 502
-    assert "24 forecast hours" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}
     assert mocked_get.call_count == 1
 
 

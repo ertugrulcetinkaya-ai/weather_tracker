@@ -174,7 +174,7 @@ def test_search_locations_upstream_http_failure():
         result = client.get("/locations/search", params={"q": "istanbul"})
 
     assert result.status_code == 502
-    assert "Open-Meteo geocoding request failed" in result.json()["detail"]
+    assert result.json() == {"detail": "Weather data is temporarily unavailable."}
 
 
 def test_search_locations_non_tr_result_skipped():

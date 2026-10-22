@@ -160,7 +160,7 @@ describe('App device location wiring', () => {
   it('feeds a user-initiated GPS fix into the existing weather pipeline', async () => {
     const { getByLabelText, getByText } = await render(<App />);
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
     expect(mockedFetchWeatherOverview).toHaveBeenCalledWith(
       { name: 'Elazığ', latitude: 38.6743, longitude: 39.2232 },
       expect.anything()
@@ -224,7 +224,7 @@ describe('App pull-to-refresh', () => {
   it('invokes the existing refresh exactly once when the user pulls to refresh', async () => {
     const { getByText, getByTestId } = await render(<App />);
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
     expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
 
     const scrollView = getByTestId('weather-scroll-view');
@@ -248,7 +248,7 @@ describe('App pull-to-refresh', () => {
       initial.resolve(overview('Elazığ'));
     });
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
 
     const pending = deferred<WeatherOverview>();
     mockedFetchWeatherOverview.mockReturnValueOnce(pending.promise);
@@ -259,15 +259,15 @@ describe('App pull-to-refresh', () => {
     });
 
     expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
-    expect(getByText(/Bağlantı kontrol ediliyor/)).toBeOnTheScreen();
-    expect(queryByText('Backend: Bağlı')).toBeNull();
+    expect(getByText(/Hava durumu güncelleniyor/)).toBeOnTheScreen();
+    expect(queryByText('Veriler güncel')).toBeNull();
 
     scrollView = getByTestId('weather-scroll-view');
     const refreshControl = scrollView.props.refreshControl;
     expect(refreshControl.type).toBe(RefreshControl);
     expect(refreshControl.props.refreshing).toBe(true);
-    expect(getByText(/Bağlantı kontrol ediliyor/)).toBeOnTheScreen();
-    expect(queryByText('Backend: Bağlı')).toBeNull();
+    expect(getByText(/Hava durumu güncelleniyor/)).toBeOnTheScreen();
+    expect(queryByText('Veriler güncel')).toBeNull();
     expect(getByText('21°')).toBeOnTheScreen();
 
     await act(async () => {
@@ -278,7 +278,7 @@ describe('App pull-to-refresh', () => {
   it('maps idle refreshStatus to RefreshControl refreshing false', async () => {
     const { getByText, getByTestId } = await render(<App />);
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
 
     const scrollView = getByTestId('weather-scroll-view');
     const refreshControl = scrollView.props.refreshControl;
@@ -289,7 +289,7 @@ describe('App pull-to-refresh', () => {
   it('maps error refreshStatus to RefreshControl refreshing false', async () => {
     const { getByText, getByTestId } = await render(<App />);
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
 
     mockedFetchWeatherOverview.mockRejectedValueOnce(new Error('offline'));
 
@@ -304,7 +304,7 @@ describe('App pull-to-refresh', () => {
     });
 
     expect(getByText('21°')).toBeOnTheScreen();
-    expect(getByText(/Backend: Bağlantı yok/)).toBeOnTheScreen();
+    expect(getByText(/Bağlantı yok · Son kaydedilen tahmin/)).toBeOnTheScreen();
 
     const refreshControl = getByTestId('weather-scroll-view').props.refreshControl;
     expect(refreshControl.type).toBe(RefreshControl);
@@ -359,15 +359,15 @@ describe('App pull-to-refresh', () => {
 
     const expectedLastUpdate = `(Son güncelleme: ${new Date(cachedRecord.fetchedAt).toLocaleString('tr-TR')})`;
 
-    await waitFor(() => expect(getByText(`Bağlantı kontrol ediliyor... ${expectedLastUpdate}`)).toBeOnTheScreen());
-    expect(queryByText('Backend: Bağlı')).toBeNull();
+    await waitFor(() => expect(getByText(`Hava durumu güncelleniyor ${expectedLastUpdate}`)).toBeOnTheScreen());
+    expect(queryByText('Veriler güncel')).toBeNull();
     expect(getByText('21°')).toBeOnTheScreen();
 
     await act(async () => {
       initialFetch.reject(new Error('offline'));
     });
 
-    await waitFor(() => expect(getByText(`Backend: Bağlantı yok ${expectedLastUpdate}`)).toBeOnTheScreen());
+    await waitFor(() => expect(getByText(`Bağlantı yok · Son kaydedilen tahmin ${expectedLastUpdate}`)).toBeOnTheScreen());
     expect(getByText('21°')).toBeOnTheScreen();
     expect(getByText('7 Günlük Tahmin')).toBeOnTheScreen();
     expect(getAllByTestId(/^daily-forecast-row-\d+$/)).toHaveLength(7);
@@ -387,14 +387,14 @@ describe('App foreground auto-refresh', () => {
   it('does not trigger an extra refresh on initial mount while already active', async () => {
     const { getByText } = await render(<App />);
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
     expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
   });
 
   it('triggers exactly one refresh on a background to active transition', async () => {
     const { getByText } = await render(<App />);
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
     expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
 
     await emitAppStateChange('background');
@@ -407,7 +407,7 @@ describe('App foreground auto-refresh', () => {
   it('triggers exactly one refresh on an inactive to active transition', async () => {
     const { getByText } = await render(<App />);
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
     expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
 
     await emitAppStateChange('inactive');
@@ -420,7 +420,7 @@ describe('App foreground auto-refresh', () => {
   it('does not trigger a refresh on an active to active transition', async () => {
     const { getByText } = await render(<App />);
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
     expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
 
     await emitAppStateChange('active');
@@ -430,7 +430,7 @@ describe('App foreground auto-refresh', () => {
   it('removes the AppState listener on unmount', async () => {
     const { getByText, unmount } = await render(<App />);
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
     expect(mockAddEventListener).toHaveBeenCalledWith('change', expect.any(Function));
 
     const subscription = mockAddEventListener.mock.results[mockAddEventListener.mock.results.length - 1]
@@ -452,7 +452,7 @@ describe('App foreground auto-refresh', () => {
       initial.resolve(overview('Elazığ'));
     });
 
-    await waitFor(() => expect(getByText('Backend: Bağlı')).toBeOnTheScreen());
+    await waitFor(() => expect(getByText('Veriler güncel')).toBeOnTheScreen());
     expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(1);
 
     const pending = deferred<WeatherOverview>();
@@ -468,8 +468,8 @@ describe('App foreground auto-refresh', () => {
 
     expect(mockedFetchWeatherOverview).toHaveBeenCalledTimes(2);
     expect(getByText('21°')).toBeOnTheScreen();
-    expect(getByText(/Bağlantı kontrol ediliyor/)).toBeOnTheScreen();
-    expect(queryByText('Backend: Bağlı')).toBeNull();
+    expect(getByText(/Hava durumu güncelleniyor/)).toBeOnTheScreen();
+    expect(queryByText('Veriler güncel')).toBeNull();
 
     await act(async () => {
       pending.resolve(overview('Elazığ'));

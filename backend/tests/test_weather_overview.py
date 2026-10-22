@@ -222,7 +222,7 @@ def test_overview_rejects_a_provider_series_missing_the_last_future_interval():
 
     assert response.status_code == 502
     assert mocked_get.call_count == 1
-    assert "24 forecast hours" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}
 
 
 def test_overview_maps_upstream_http_failure_to_bad_gateway():
@@ -236,7 +236,7 @@ def test_overview_maps_upstream_http_failure_to_bad_gateway():
         response = client.get("/weather/overview")
 
     assert response.status_code == 502
-    assert "Open-Meteo request failed" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}
 
 
 def test_overview_rejects_missing_provider_timezone_without_assuming_one():
@@ -249,7 +249,7 @@ def test_overview_rejects_missing_provider_timezone_without_assuming_one():
         response = client.get("/weather/overview")
 
     assert response.status_code == 502
-    assert "timezone" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}
 
 
 def test_current_maps_invalid_provider_json_to_bad_gateway():
@@ -260,7 +260,7 @@ def test_current_maps_invalid_provider_json_to_bad_gateway():
         response = client.get("/weather/current")
 
     assert response.status_code == 502
-    assert "not valid JSON" in response.json()["detail"]
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}
 
 
 @pytest.mark.parametrize(

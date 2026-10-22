@@ -1,3 +1,5 @@
-const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+import { resolveApiBaseUrl } from './resolveBaseUrl';
 
-export const BACKEND_URL = (configuredUrl || 'http://127.0.0.1:8000').replace(/\/$/, '');
+const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+
+export const BACKEND_URL = resolveApiBaseUrl(configuredUrl, __DEV__);
