@@ -22,6 +22,8 @@ previous duplicate hourly fetch and prevents partially updated UI states.
 
 More detail is available in [docs/architecture.md](docs/architecture.md).
 
+Download the latest Android APK from the [GitHub Releases page](https://github.com/ertugrulcetinkaya-ai/weather_tracker/releases/latest).
+
 Hosting setup and free-tier limits are documented in [docs/r2-free-hosting.md](docs/r2-free-hosting.md).
 
 ## Local development
