@@ -43,6 +43,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e49adc1e-99de-4bfc-9556-dbea23f14a4e"
+      }
+    },
+    "owner": "ertugrulcetinkaya"
   }
 }
