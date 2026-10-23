@@ -16,8 +16,10 @@
       "environment": "production",
       "autoIncrement": true,
       "credentialsSource": "remote",
+      "distribution": "internal",
       "env": {
-        "APP_ENV": "production"
+        "APP_ENV": "production",
+        "EXPO_PUBLIC_API_BASE_URL": "https://weather-tracker-nine-delta.vercel.app"
       },
       "android": {
         "buildType": "apk"

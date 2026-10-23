@@ -102,10 +102,18 @@ describe('API base URL configuration', () => {
     const configured = appConfig.configureExpoConfig(expoConfig, {
       APP_ENV: 'production',
       EXPO_PUBLIC_API_BASE_URL: 'https://api.example.com/',
-    }) as { android: { package: string; versionCode: number } };
+    }) as {
+      android: { package: string; versionCode: number; blockedPermissions: string[] };
+    };
 
     expect(configured.android.package).toBe('com.ertugrulcetinkaya.weathertracker');
     expect(configured.android.versionCode).toBe(1);
+    expect(configured.android.blockedPermissions).toEqual([
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+      'android.permission.SYSTEM_ALERT_WINDOW',
+      'android.permission.VIBRATE',
+    ]);
   });
 
   test('release configuration rejects localhost even when it uses HTTPS', () => {
@@ -211,8 +219,9 @@ describe('API base URL configuration', () => {
         production: {
           credentialsSource: string;
           environment: string;
-          env: { APP_ENV: string };
+          env: { APP_ENV: string; EXPO_PUBLIC_API_BASE_URL: string };
           android: { buildType: string };
+          distribution: string;
         };
       };
     };
@@ -220,6 +229,10 @@ describe('API base URL configuration', () => {
     expect(easConfig.build.production.credentialsSource).toBe('remote');
     expect(easConfig.build.production.environment).toBe('production');
     expect(easConfig.build.production.env.APP_ENV).toBe('production');
+    expect(easConfig.build.production.env.EXPO_PUBLIC_API_BASE_URL).toBe(
+      'https://weather-tracker-nine-delta.vercel.app'
+    );
+    expect(easConfig.build.production.distribution).toBe('internal');
     expect(easConfig.build.production.android.buildType).toBe('apk');
   });
 });
